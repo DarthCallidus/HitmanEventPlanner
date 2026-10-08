@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Hitman Entertainment">
+  <rect width="16" height="16" rx="3" fill="#12110e"/>
+  <g fill="#e4a23b">
+    <rect x="2" y="2" width="5" height="2"/>
+    <rect x="3" y="2" width="3" height="12"/>
+    <rect x="2" y="12" width="5" height="2"/>
+    <rect x="9" y="2" width="5" height="2"/>
+    <rect x="10" y="2" width="3" height="12"/>
+    <rect x="9" y="12" width="5" height="2"/>
+    <rect x="3" y="7" width="10" height="2"/>
+  </g>
+</svg>
