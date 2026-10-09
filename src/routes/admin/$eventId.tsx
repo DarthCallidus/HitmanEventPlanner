@@ -52,6 +52,7 @@ function EventDesk({ eventId }: { eventId: string }) {
   const [clientPassword, setClientPassword] = useState(suggestPassword);
   const [madeLogin, setMadeLogin] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [changesOpen, setChangesOpen] = useState(false);
 
   function apply(next: EventRecord) {
     setEvent(next);
@@ -353,18 +354,30 @@ function EventDesk({ eventId }: { eventId: string }) {
       </section>
 
       <section className="mt-10 mb-8">
-        <h2 className="font-display text-2xl">Changes</h2>
-        <div className="mt-3 space-y-3">
-          {event.changes.length === 0 && <p className="text-sm text-faint">No edits yet.</p>}
-          {event.changes.map((change) => (
-            <div key={change.id} className="border-b border-line pb-3">
-              <p>{change.summary}</p>
-              <p className="text-sm text-faint">
-                {change.actorName} · {relativeTime(change.createdAt)}
-              </p>
-            </div>
-          ))}
-        </div>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between"
+          aria-expanded={changesOpen}
+          onClick={() => setChangesOpen((open) => !open)}
+        >
+          <h2 className="font-display text-2xl">Changes</h2>
+          <span className="text-xl text-faint" aria-hidden>
+            {changesOpen ? "▾" : "▸"}
+          </span>
+        </button>
+        {changesOpen && (
+          <div className="mt-3 space-y-3">
+            {event.changes.length === 0 && <p className="text-sm text-faint">No edits yet.</p>}
+            {event.changes.map((change) => (
+              <div key={change.id} className="border-b border-line pb-3">
+                <p>{change.summary}</p>
+                <p className="text-sm text-faint">
+                  {change.actorName} · {relativeTime(change.createdAt)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="mt-12 mb-10 border-t border-line pt-8">
