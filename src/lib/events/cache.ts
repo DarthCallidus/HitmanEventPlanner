@@ -20,6 +20,8 @@ export function readCache(id: string): CachedEvent | null {
     parsed.event.details = normalizeDetails(parsed.event.details);
     parsed.event.boothNotes = parsed.event.boothNotes ?? "";
     parsed.event.contractPdfName = parsed.event.contractPdfName ?? "";
+    parsed.event.djUserId = parsed.event.djUserId ?? null;
+    parsed.event.djName = parsed.event.djName ?? null;
     parsed.event.changes = parsed.event.changes ?? [];
     return parsed;
   } catch {
@@ -39,6 +41,35 @@ export function readChecks(id: string): string[] {
 
 export function writeChecks(id: string, ids: string[]) {
   localStorage.setItem(PREFIX + "checks:" + id, JSON.stringify(ids));
+}
+
+export type BoothRequest = {
+  id: string;
+  song: string;
+  artist: string;
+  who: string;
+  mark: "" | "played" | "skipped";
+};
+
+export function readRequests(id: string): BoothRequest[] {
+  try {
+    const raw = localStorage.getItem(PREFIX + "requests:" + id);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((row) => {
+      if (!row || typeof row !== "object") return [];
+      const item = row as Partial<BoothRequest>;
+      if (typeof item.id !== "string" || typeof item.song !== "string") return [];
+      const mark = item.mark === "played" || item.mark === "skipped" ? item.mark : "";
+      return [{ id: item.id, song: item.song, artist: typeof item.artist === "string" ? item.artist : "", who: typeof item.who === "string" ? item.who : "", mark }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function writeRequests(id: string, rows: BoothRequest[]) {
+  localStorage.setItem(PREFIX + "requests:" + id, JSON.stringify(rows));
 }
 
 export function readPendingNotes(id: string): string | null {

@@ -13,6 +13,7 @@ import {
   getContractPdf,
   getEvent,
   listClients,
+  listDjs,
   saveContractPdf,
   updateEventMeta,
 } from "@/lib/events/server";
@@ -39,12 +40,14 @@ function EventDesk({ eventId }: { eventId: string }) {
   const navigate = useNavigate();
   const [event, setEvent] = useState<EventRecord | null>(null);
   const [clients, setClients] = useState<ClientRow[]>([]);
+  const [djs, setDjs] = useState<ClientRow[]>([]);
   const [error, setError] = useState("");
   const [title, setTitle] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [venue, setVenue] = useState("");
   const [status, setStatus] = useState<EventStatus>("new");
   const [clientUserId, setClientUserId] = useState("");
+  const [djUserId, setDjUserId] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [clientName, setClientName] = useState("");
@@ -61,6 +64,7 @@ function EventDesk({ eventId }: { eventId: string }) {
     setVenue(next.venue);
     setStatus(next.status);
     setClientUserId(next.clientUserId ?? "");
+    setDjUserId(next.djUserId ?? "");
     writeCache(next);
   }
 
@@ -73,9 +77,10 @@ function EventDesk({ eventId }: { eventId: string }) {
   useEffect(() => {
     reload();
     listClients().then(setClients).catch(() => setClients([]));
+    listDjs().then(setDjs).catch(() => setDjs([]));
   }, [eventId]);
 
-  async function saveMeta(nextStatus = status, nextClient = clientUserId) {
+  async function saveMeta(nextStatus = status, nextClient = clientUserId, nextDj = djUserId) {
     setBusy(true);
     setError("");
     try {
@@ -87,6 +92,7 @@ function EventDesk({ eventId }: { eventId: string }) {
           venue,
           status: nextStatus,
           clientUserId: nextClient || null,
+          djUserId: nextDj || null,
         },
       });
       setNotice("Event info saved");
@@ -285,6 +291,17 @@ function EventDesk({ eventId }: { eventId: string }) {
             {clients.map((client) => (
               <option key={client.userId} value={client.userId}>
                 {client.displayName} · {client.email}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm text-muted">Assigned DJ</span>
+          <select className="field" value={djUserId} onChange={(e) => setDjUserId(e.target.value)}>
+            <option value="">No DJ yet</option>
+            {djs.map((dj) => (
+              <option key={dj.userId} value={dj.userId}>
+                {dj.displayName} · {dj.email}
               </option>
             ))}
           </select>

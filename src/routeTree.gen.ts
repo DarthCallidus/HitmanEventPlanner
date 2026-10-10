@@ -13,8 +13,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminEventIdRouteImport } from './routes/admin/$eventId'
+import { Route as AdminPeopleRouteImport } from './routes/admin/people'
 import { Route as BoothEventIdRouteImport } from './routes/booth/$eventId'
 import { Route as BriefEventIdRouteImport } from './routes/brief/$eventId'
+import { Route as DjIndexRouteImport } from './routes/dj/index'
+import { Route as DjEventIdRouteImport } from './routes/dj/$eventId'
 import { Route as PortalIndexRouteImport } from './routes/portal/index'
 import { Route as PortalEventIdRouteImport } from './routes/portal/$eventId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -39,6 +42,11 @@ const AdminEventIdRoute = AdminEventIdRouteImport.update({
   path: '/admin/$eventId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPeopleRoute = AdminPeopleRouteImport.update({
+  id: '/admin/people',
+  path: '/admin/people',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BoothEventIdRoute = BoothEventIdRouteImport.update({
   id: '/booth/$eventId',
   path: '/booth/$eventId',
@@ -47,6 +55,16 @@ const BoothEventIdRoute = BoothEventIdRouteImport.update({
 const BriefEventIdRoute = BriefEventIdRouteImport.update({
   id: '/brief/$eventId',
   path: '/brief/$eventId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DjIndexRoute = DjIndexRouteImport.update({
+  id: '/dj/',
+  path: '/dj/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DjEventIdRoute = DjEventIdRouteImport.update({
+  id: '/dj/$eventId',
+  path: '/dj/$eventId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PortalIndexRoute = PortalIndexRouteImport.update({
@@ -69,10 +87,13 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin/$eventId': typeof AdminEventIdRoute
+  '/admin/people': typeof AdminPeopleRoute
   '/booth/$eventId': typeof BoothEventIdRoute
   '/brief/$eventId': typeof BriefEventIdRoute
+  '/dj/$eventId': typeof DjEventIdRoute
   '/portal/$eventId': typeof PortalEventIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/dj/': typeof DjIndexRoute
   '/portal/': typeof PortalIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -80,10 +101,13 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin/$eventId': typeof AdminEventIdRoute
+  '/admin/people': typeof AdminPeopleRoute
   '/booth/$eventId': typeof BoothEventIdRoute
   '/brief/$eventId': typeof BriefEventIdRoute
+  '/dj/$eventId': typeof DjEventIdRoute
   '/portal/$eventId': typeof PortalEventIdRoute
   '/admin': typeof AdminIndexRoute
+  '/dj': typeof DjIndexRoute
   '/portal': typeof PortalIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -92,10 +116,13 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin/$eventId': typeof AdminEventIdRoute
+  '/admin/people': typeof AdminPeopleRoute
   '/booth/$eventId': typeof BoothEventIdRoute
   '/brief/$eventId': typeof BriefEventIdRoute
+  '/dj/$eventId': typeof DjEventIdRoute
   '/portal/$eventId': typeof PortalEventIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/dj/': typeof DjIndexRoute
   '/portal/': typeof PortalIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -105,10 +132,13 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin/$eventId'
+    | '/admin/people'
     | '/booth/$eventId'
     | '/brief/$eventId'
+    | '/dj/$eventId'
     | '/portal/$eventId'
     | '/admin/'
+    | '/dj/'
     | '/portal/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -116,10 +146,13 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin/$eventId'
+    | '/admin/people'
     | '/booth/$eventId'
     | '/brief/$eventId'
+    | '/dj/$eventId'
     | '/portal/$eventId'
     | '/admin'
+    | '/dj'
     | '/portal'
     | '/api/auth/$'
   id:
@@ -127,10 +160,13 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin/$eventId'
+    | '/admin/people'
     | '/booth/$eventId'
     | '/brief/$eventId'
+    | '/dj/$eventId'
     | '/portal/$eventId'
     | '/admin/'
+    | '/dj/'
     | '/portal/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -139,10 +175,13 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
   AdminEventIdRoute: typeof AdminEventIdRoute
+  AdminPeopleRoute: typeof AdminPeopleRoute
   BoothEventIdRoute: typeof BoothEventIdRoute
   BriefEventIdRoute: typeof BriefEventIdRoute
+  DjEventIdRoute: typeof DjEventIdRoute
   PortalEventIdRoute: typeof PortalEventIdRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  DjIndexRoute: typeof DjIndexRoute
   PortalIndexRoute: typeof PortalIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -177,6 +216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminEventIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/people': {
+      id: '/admin/people'
+      path: '/admin/people'
+      fullPath: '/admin/people'
+      preLoaderRoute: typeof AdminPeopleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/booth/$eventId': {
       id: '/booth/$eventId'
       path: '/booth/$eventId'
@@ -189,6 +235,20 @@ declare module '@tanstack/react-router' {
       path: '/brief/$eventId'
       fullPath: '/brief/$eventId'
       preLoaderRoute: typeof BriefEventIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dj/': {
+      id: '/dj/'
+      path: '/dj'
+      fullPath: '/dj/'
+      preLoaderRoute: typeof DjIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dj/$eventId': {
+      id: '/dj/$eventId'
+      path: '/dj/$eventId'
+      fullPath: '/dj/$eventId'
+      preLoaderRoute: typeof DjEventIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/portal/': {
@@ -219,10 +279,13 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
   AdminEventIdRoute: AdminEventIdRoute,
+  AdminPeopleRoute: AdminPeopleRoute,
   BoothEventIdRoute: BoothEventIdRoute,
   BriefEventIdRoute: BriefEventIdRoute,
+  DjEventIdRoute: DjEventIdRoute,
   PortalEventIdRoute: PortalEventIdRoute,
   AdminIndexRoute: AdminIndexRoute,
+  DjIndexRoute: DjIndexRoute,
   PortalIndexRoute: PortalIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

@@ -12,7 +12,7 @@ export const Route = createFileRoute("/booth/$eventId")({ component: BoothPage }
 function BoothPage() {
   const { eventId } = Route.useParams();
   return (
-    <AccountGate role="admin">
+    <AccountGate roles={["admin", "dj"]}>
       {() => <BoothLoader key={eventId} eventId={eventId} />}
     </AccountGate>
   );

@@ -8,6 +8,12 @@ import { BrandLogo } from "@/components/brand-logo";
 import { errText } from "@/lib/events/format";
 import { lockDayTheme, unlockDayTheme } from "@/lib/theme";
 
+export function homeFor(role: Profile["role"]) {
+  if (role === "admin") return "/admin";
+  if (role === "dj") return "/dj";
+  return "/portal";
+}
+
 export function Splash() {
   return (
     <main className="grid min-h-screen place-items-center px-6">
@@ -18,10 +24,12 @@ export function Splash() {
 
 export function AccountGate({
   role,
+  roles,
   theme = "night",
   children,
 }: {
   role?: Profile["role"];
+  roles?: Profile["role"][];
   theme?: "night" | "day";
   children: (profile: Profile) => ReactNode;
 }) {
@@ -59,8 +67,9 @@ export function AccountGate({
       </main>
     );
   }
-  if (role && profile.role !== role) {
-    return <Navigate to={profile.role === "admin" ? "/admin" : "/portal"} />;
+  const allowed = roles ?? (role ? [role] : null);
+  if (allowed && !allowed.includes(profile.role)) {
+    return <Navigate to={homeFor(profile.role)} />;
   }
   return <>{children(profile)}</>;
 }

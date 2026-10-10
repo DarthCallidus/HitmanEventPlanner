@@ -154,7 +154,7 @@ export type EventDetails = {
 
 export type Profile = {
   userId: string;
-  role: "admin" | "client";
+  role: "admin" | "client" | "dj";
   displayName: string;
   email: string;
 };
@@ -168,6 +168,8 @@ export type EventSummary = {
   updatedAt: string;
   clientUserId: string | null;
   clientName: string | null;
+  djUserId: string | null;
+  djName: string | null;
   couple: string;
   percent: number;
   missing: string[];
@@ -192,6 +194,8 @@ export type EventRecord = {
   createdBy: string;
   clientUserId: string | null;
   clientName: string | null;
+  djUserId: string | null;
+  djName: string | null;
   boothNotes: string;
   contractPdfName: string;
   details: EventDetails;

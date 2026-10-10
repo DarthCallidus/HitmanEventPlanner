@@ -5,9 +5,9 @@ import { AccountGate } from "@/components/account-gate";
 import { BrandLogo } from "@/components/brand-logo";
 import { buildSample } from "@/lib/events/sample";
 import { fileToBase64 } from "@/lib/events/cache";
-import { createEvent, listEvents, saveContractPdf } from "@/lib/events/server";
+import { createEvent, listDjs, listEvents, saveContractPdf } from "@/lib/events/server";
 import { daysLabel, daysUntil, errText, formatShortDate, relativeTime } from "@/lib/events/format";
-import { STATUS_LABEL, type EventStatus, type EventSummary } from "@/lib/events/types";
+import { STATUS_LABEL, type ClientRow, type EventStatus, type EventSummary } from "@/lib/events/types";
 
 export const Route = createFileRoute("/admin/")({ component: AdminHome });
 
@@ -30,6 +30,8 @@ function Desk() {
   const [eventDate, setEventDate] = useState("");
   const [venue, setVenue] = useState("");
   const [contract, setContract] = useState<File | null>(null);
+  const [djs, setDjs] = useState<ClientRow[]>([]);
+  const [djUserId, setDjUserId] = useState("");
   const [busy, setBusy] = useState(false);
 
   function reload() {
@@ -40,6 +42,7 @@ function Desk() {
 
   useEffect(() => {
     reload();
+    listDjs().then(setDjs).catch(() => setDjs([]));
   }, []);
 
   const visible = useMemo(() => {
@@ -70,7 +73,9 @@ function Desk() {
     setBusy(true);
     setError("");
     try {
-      const draft = sample ? buildSample() : { title: title.trim(), eventDate, venue, status: "new" as const, details: {} };
+      const draft = sample
+        ? { ...buildSample(), djUserId: null }
+        : { title: title.trim(), eventDate, venue, status: "new" as const, details: {}, djUserId: djUserId || null };
       if (!sample && !draft.title) {
         setError("Name the wedding");
         setBusy(false);
@@ -131,6 +136,9 @@ function Desk() {
             {busy ? "Opening…" : "Sample Booth"}
           </button>
         </div>
+        <Link to="/admin/people" className="btn-line btn-block">
+          DJs and clients
+        </Link>
         {creating && (
           <form
             className="space-y-3 rounded-2xl border border-line bg-surface p-4"
@@ -150,6 +158,17 @@ function Desk() {
                 accept="application/pdf,.pdf"
                 onChange={(e) => setContract(e.target.files?.[0] ?? null)}
               />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm text-muted">Assigned DJ</span>
+              <select className="field" value={djUserId} onChange={(e) => setDjUserId(e.target.value)} aria-label="Assigned DJ">
+                <option value="">No DJ yet</option>
+                {djs.map((dj) => (
+                  <option key={dj.userId} value={dj.userId}>
+                    {dj.displayName} · {dj.email}
+                  </option>
+                ))}
+              </select>
             </label>
             <button className="btn btn-block" disabled={busy} type="submit">
               Create event

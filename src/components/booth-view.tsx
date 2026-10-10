@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { formatLongDate, relativeTime, timelineFocus } from "@/lib/events/format";
 import { openPdf } from "@/lib/events/cache";
@@ -8,15 +8,18 @@ import {
   readChecks,
   readPendingNotes,
   readPdfCache,
+  readRequests,
   writeCache,
   writeChecks,
   writePdfCache,
   writePendingNotes,
+  writeRequests,
 } from "@/lib/events/cache";
 import { getTimelinePdf, saveBoothNotes } from "@/lib/events/server";
+import type { BoothRequest } from "@/lib/events/cache";
 import type { EventRecord } from "@/lib/events/types";
 
-type Tab = "today" | "ceremony" | "reception" | "timeline" | "music" | "notes";
+type Tab = "today" | "ceremony" | "reception" | "timeline" | "music" | "mix" | "requests" | "notes";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "today", label: "Today" },
@@ -24,6 +27,8 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "reception", label: "Reception" },
   { id: "timeline", label: "Timeline" },
   { id: "music", label: "Music" },
+  { id: "mix", label: "Mix" },
+  { id: "requests", label: "Requests" },
   { id: "notes", label: "Notes" },
 ];
 
@@ -53,6 +58,7 @@ export function BoothView({
   const [sync, setSync] = useState(initialSync);
   const [notes, setNotes] = useState(readPendingNotes(event.id) ?? event.boothNotes);
   const [checks, setChecks] = useState<string[]>(() => readChecks(event.id));
+  const [requests, setRequests] = useState<BoothRequest[]>(() => readRequests(event.id));
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -215,7 +221,16 @@ export function BoothView({
               <SongLine key={row.id} label={row.label} value={row.value} />
             ))}
             {event.details.ceremony.music.map((row) => (
-              <SongLine key={row.id} label={row.label} value={row.song} artist={row.artist} link={row.link} cue={row.cue} />
+              <SongLine
+                key={row.id}
+                label={row.label}
+                value={row.song}
+                artist={row.artist}
+                link={row.link}
+                cue={row.cue}
+                done={checks.includes(row.id)}
+                onToggle={() => toggleCheck(row.id)}
+              />
             ))}
           </div>
         )}
@@ -235,7 +250,16 @@ export function BoothView({
             <section className="space-y-3">
               <h2 className="text-sm uppercase tracking-widest text-faint">Songs</h2>
               {event.details.reception.map((row) => (
-                <SongLine key={row.id} label={row.label} value={row.song} artist={row.artist} link={row.link} cue={row.cue} />
+                <SongLine
+                  key={row.id}
+                  label={row.label}
+                  value={row.song}
+                  artist={row.artist}
+                  link={row.link}
+                  cue={row.cue}
+                  done={checks.includes(row.id)}
+                  onToggle={() => toggleCheck(row.id)}
+                />
               ))}
             </section>
             <section className="space-y-3">
@@ -385,6 +409,23 @@ export function BoothView({
           </div>
         )}
 
+        {tab === "mix" && (
+          <div className="space-y-4">
+            <CamelotWheel />
+            <TapTempo />
+          </div>
+        )}
+
+        {tab === "requests" && (
+          <RequestList
+            rows={requests}
+            onChange={(next) => {
+              setRequests(next);
+              writeRequests(event.id, next);
+            }}
+          />
+        )}
+
         {tab === "notes" && (
           <div className="space-y-4">
             <h1 className="font-display text-4xl">Notes</h1>
@@ -409,12 +450,12 @@ export function BoothView({
         )}
       </div>
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface">
-        <div className="mx-auto grid max-w-lg grid-cols-6">
+        <div className="mx-auto grid max-w-lg grid-cols-8">
           {TABS.map((item) => (
             <button
               key={item.id}
               type="button"
-              className={item.id === tab ? "min-h-14 px-1 text-xs text-accent" : "min-h-14 px-1 text-xs text-faint"}
+              className={item.id === tab ? "min-h-14 px-0.5 text-[10px] leading-tight text-accent" : "min-h-14 px-0.5 text-[10px] leading-tight text-faint"}
               onClick={() => setTab(item.id)}
             >
               {item.label}
@@ -422,6 +463,284 @@ export function BoothView({
           ))}
         </div>
       </nav>
+    </div>
+  );
+}
+
+function polar(cx: number, cy: number, r: number, deg: number) {
+  const rad = (deg * Math.PI) / 180;
+  return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+}
+
+function sector(cx: number, cy: number, r0: number, r1: number, a0: number, a1: number) {
+  const large = a1 - a0 > 180 ? 1 : 0;
+  const [x0, y0] = polar(cx, cy, r1, a0);
+  const [x1, y1] = polar(cx, cy, r1, a1);
+  const [x2, y2] = polar(cx, cy, r0, a1);
+  const [x3, y3] = polar(cx, cy, r0, a0);
+  return `M ${x0} ${y0} A ${r1} ${r1} 0 ${large} 1 ${x1} ${y1} L ${x2} ${y2} A ${r0} ${r0} 0 ${large} 0 ${x3} ${y3} Z`;
+}
+
+const CAMELOT: Array<{ n: number; letter: "A" | "B"; name: string }> = [
+  { n: 1, letter: "A", name: "Ab minor" },
+  { n: 1, letter: "B", name: "B major" },
+  { n: 2, letter: "A", name: "Eb minor" },
+  { n: 2, letter: "B", name: "F# major" },
+  { n: 3, letter: "A", name: "Bb minor" },
+  { n: 3, letter: "B", name: "Db major" },
+  { n: 4, letter: "A", name: "F minor" },
+  { n: 4, letter: "B", name: "Ab major" },
+  { n: 5, letter: "A", name: "C minor" },
+  { n: 5, letter: "B", name: "Eb major" },
+  { n: 6, letter: "A", name: "G minor" },
+  { n: 6, letter: "B", name: "Bb major" },
+  { n: 7, letter: "A", name: "D minor" },
+  { n: 7, letter: "B", name: "F major" },
+  { n: 8, letter: "A", name: "A minor" },
+  { n: 8, letter: "B", name: "C major" },
+  { n: 9, letter: "A", name: "E minor" },
+  { n: 9, letter: "B", name: "G major" },
+  { n: 10, letter: "A", name: "B minor" },
+  { n: 10, letter: "B", name: "D major" },
+  { n: 11, letter: "A", name: "F# minor" },
+  { n: 11, letter: "B", name: "A major" },
+  { n: 12, letter: "A", name: "C# minor" },
+  { n: 12, letter: "B", name: "E major" },
+];
+
+function camelotKey(code: string) {
+  return CAMELOT.find((key) => `${key.n}${key.letter}` === code);
+}
+
+function wrapKey(n: number) {
+  return ((n - 1 + 12) % 12) + 1;
+}
+
+function CamelotWheel() {
+  const [selected, setSelected] = useState<string | null>(null);
+  const current = selected ? camelotKey(selected) : undefined;
+  const relative = current ? `${current.n}${current.letter === "A" ? "B" : "A"}` : "";
+  const back = current ? `${wrapKey(current.n - 1)}${current.letter}` : "";
+  const forward = current ? `${wrapKey(current.n + 1)}${current.letter}` : "";
+  const near = new Set([selected, relative, back, forward].filter(Boolean));
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (event.key === "Escape") {
+        setSelected(null);
+        return;
+      }
+      const key = selected ? camelotKey(selected) : undefined;
+      let next = "";
+      if (event.key === "ArrowRight") next = key ? `${wrapKey(key.n + 1)}${key.letter}` : "1B";
+      if (event.key === "ArrowLeft") next = key ? `${wrapKey(key.n - 1)}${key.letter}` : "1B";
+      if (event.key === "ArrowUp") next = key ? `${key.n}B` : "1B";
+      if (event.key === "ArrowDown") next = key ? `${key.n}A` : "1A";
+      if (!next) return;
+      event.preventDefault();
+      setSelected(next);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
+
+  const moves = current
+    ? [
+        { code: selected as string, note: "Same key" },
+        { code: back, note: "Step back" },
+        { code: forward, note: "Step forward" },
+        { code: relative, note: "Relative key" },
+      ]
+    : [];
+
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-faint">Harmonic compass</p>
+          <h2 className="font-display text-3xl">Camelot wheel</h2>
+        </div>
+        <button type="button" className="btn-line" onClick={() => setSelected(null)}>
+          Reset key
+        </button>
+      </div>
+      <svg viewBox="0 0 320 320" className="mx-auto mt-2 w-full max-w-sm" role="group" aria-label="Camelot wheel">
+        {CAMELOT.map((key) => {
+          const code = `${key.n}${key.letter}`;
+          const center = -90 + (key.n - 1) * 30;
+          const outer = key.letter === "B";
+          const path = sector(160, 160, outer ? 108 : 62, outer ? 156 : 104, center - 14.2, center + 14.2);
+          const [tx, ty] = polar(160, 160, outer ? 132 : 83, center);
+          const state = code === selected ? "selected" : near.has(code) ? "near" : "idle";
+          const fill =
+            state === "selected"
+              ? "var(--app-accent)"
+              : state === "near"
+                ? "color-mix(in srgb, var(--app-fg) 22%, var(--app-bg))"
+                : "var(--app-bg)";
+          const ink = state === "selected" ? "var(--app-accent-fg)" : "var(--app-fg)";
+          return (
+            <g key={code} onClick={() => setSelected(code)} className="cursor-pointer">
+              <path d={path} fill={fill} stroke="var(--app-bg)" strokeWidth="3" />
+              <text x={tx} y={ty} textAnchor="middle" fill={ink} className="pointer-events-none">
+                <tspan x={tx} dy="-0.15em" fontSize={outer ? 13 : 11} fontWeight="650">
+                  {code}
+                </tspan>
+                <tspan x={tx} dy="1.15em" fontSize="8" fill={state === "selected" ? ink : "var(--app-muted)"}>
+                  {key.name.replace(" minor", "").replace(" major", "")}
+                </tspan>
+              </text>
+            </g>
+          );
+        })}
+        <circle cx="160" cy="160" r="56" fill="var(--app-surface)" />
+        <text x="160" y="132" textAnchor="middle" fill="var(--app-faint)" fontSize="9" letterSpacing="1.5">
+          SELECTED KEY
+        </text>
+        <text x="160" y="168" textAnchor="middle" fill="var(--app-fg)" fontSize="32" fontWeight="650">
+          {current ? `${current.n}${current.letter}` : "—"}
+        </text>
+        <text x="160" y="190" textAnchor="middle" fill="var(--app-muted)" fontSize="12">
+          {current ? current.name : "Tap a key"}
+        </text>
+      </svg>
+      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-accent" /> Selected
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-fg/30" /> Compatible
+        </span>
+        <span>A · Minor (inner) / B · Major (outer)</span>
+      </p>
+      {current && (
+        <div className="mt-4 rounded-2xl border border-line p-3">
+          <p className="text-xs uppercase tracking-widest text-faint">Your next moves</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {moves.map((move) => {
+              const key = camelotKey(move.code);
+              return (
+                <button
+                  key={move.note}
+                  type="button"
+                  className="rounded-xl border border-line px-3 py-3 text-left"
+                  onClick={() => setSelected(move.code)}
+                >
+                  <span className="block font-display text-2xl">{move.code}</span>
+                  <span className="block text-sm text-muted">{key?.name}</span>
+                  <span className="block text-xs text-faint">{move.note}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-sm text-muted">
+            Same key, the number on either side, or the relative major or minor. 12 and 1 are neighbors.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TapTempo() {
+  const taps = useMemo(() => ({ times: [] as number[] }), []);
+  const [bpm, setBpm] = useState<number | null>(null);
+
+  function tap() {
+    const now = performance.now();
+    const last = taps.times[taps.times.length - 1];
+    if (last != null && now - last > 2000) taps.times = [];
+    taps.times.push(now);
+    if (taps.times.length > 8) taps.times = taps.times.slice(-8);
+    if (taps.times.length < 2) {
+      setBpm(null);
+      return;
+    }
+    let total = 0;
+    for (let i = 1; i < taps.times.length; i++) total += taps.times[i] - taps.times[i - 1];
+    setBpm(Math.round(60000 / (total / (taps.times.length - 1))));
+  }
+
+  function reset() {
+    taps.times = [];
+    setBpm(null);
+  }
+
+  return (
+    <section className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface p-4">
+      <div>
+        <p className="text-xs uppercase tracking-widest text-faint">Tap tempo</p>
+        <p className="font-display text-6xl tabular-nums leading-none">{bpm ?? "—"}</p>
+        <p className="mt-1 text-xs uppercase tracking-widest text-faint">BPM</p>
+        <button type="button" className="mt-3 text-sm underline" onClick={reset}>
+          Reset
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={tap}
+        className="grid size-28 shrink-0 place-items-center rounded-full border border-fg text-lg"
+        aria-label="Tap the beat"
+      >
+        Tap
+      </button>
+    </section>
+  );
+}
+
+function RequestList({ rows, onChange }: { rows: BoothRequest[]; onChange: (next: BoothRequest[]) => void }) {
+  const [song, setSong] = useState("");
+  const [artist, setArtist] = useState("");
+  const [who, setWho] = useState("");
+
+  function add(event: FormEvent) {
+    event.preventDefault();
+    const title = song.trim();
+    if (!title) return;
+    onChange([{ id: crypto.randomUUID(), song: title, artist: artist.trim(), who: who.trim(), mark: "" }, ...rows]);
+    setSong("");
+    setArtist("");
+    setWho("");
+  }
+
+  function mark(id: string, mark: "played" | "skipped") {
+    onChange(rows.map((row) => (row.id === id ? { ...row, mark: row.mark === mark ? "" : mark } : row)));
+  }
+
+  return (
+    <div className="space-y-4">
+      <h1 className="font-display text-4xl">Requests</h1>
+      <form className="space-y-2" onSubmit={add}>
+        <input className="field" value={song} onChange={(event) => setSong(event.target.value)} placeholder="Song" aria-label="Song" />
+        <input className="field" value={artist} onChange={(event) => setArtist(event.target.value)} placeholder="Artist" aria-label="Artist" />
+        <input className="field" value={who} onChange={(event) => setWho(event.target.value)} placeholder="Who asked" aria-label="Who asked" />
+        <button className="btn btn-block" type="submit">
+          Add request
+        </button>
+      </form>
+      {rows.length === 0 && <p className="text-muted">No requests yet.</p>}
+      <div className="space-y-2">
+        {rows.map((row) => (
+          <div key={row.id} className="rounded-2xl border border-line bg-surface px-4 py-3">
+            <p className={row.mark ? "font-display text-2xl text-faint line-through" : "font-display text-2xl"}>{row.song}</p>
+            {row.artist && <p className={row.mark ? "text-sm text-faint line-through" : "text-sm text-muted"}>{row.artist}</p>}
+            {row.who && <p className="text-sm text-muted">{row.who}</p>}
+            <div className="mt-3 flex gap-2">
+              <button type="button" className={row.mark === "played" ? "btn" : "btn-line"} onClick={() => mark(row.id, "played")}>
+                Played
+              </button>
+              <button type="button" className={row.mark === "skipped" ? "btn" : "btn-line"} onClick={() => mark(row.id, "skipped")}>
+                Skip
+              </button>
+              <button type="button" className="btn-line ml-auto" onClick={() => onChange(rows.filter((item) => item.id !== row.id))}>
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -453,12 +772,16 @@ function SongLine({
   artist = "",
   link = "",
   cue = "",
+  done = false,
+  onToggle,
 }: {
   label: string;
   value: string;
   artist?: string;
   link?: string;
   cue?: string;
+  done?: boolean;
+  onToggle?: () => void;
 }) {
   const href = link.trim();
   if (!value.trim() && !artist.trim() && !href && !cue.trim()) return null;
@@ -467,13 +790,26 @@ function SongLine({
   return (
     <div>
       <p className="text-sm text-faint">{label}</p>
-      {title && <p className="font-display text-2xl">{title}</p>}
-      {cue.trim() && <p className="text-sm text-muted">Start at {cue.trim()}</p>}
-      {url && (
-        <a href={url} target="_blank" rel="noreferrer" className="text-sm underline">
-          Song link
-        </a>
-      )}
+      <div className="flex items-start gap-3">
+        {onToggle && (
+          <button
+            type="button"
+            aria-pressed={done}
+            aria-label={done ? "Mark not played" : "Mark played"}
+            onClick={onToggle}
+            className={done ? "mt-2 size-5 shrink-0 rounded-full bg-accent" : "mt-2 size-5 shrink-0 rounded-full border border-line"}
+          />
+        )}
+        <div className="min-w-0">
+          {title && <p className={done ? "font-display text-2xl text-faint line-through" : "font-display text-2xl"}>{title}</p>}
+          {cue.trim() && <p className="text-sm text-muted">Start at {cue.trim()}</p>}
+          {url && (
+            <a href={url} target="_blank" rel="noreferrer" className="text-sm underline">
+              Song link
+            </a>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
