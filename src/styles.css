@@ -77,36 +77,10 @@
   }
 }
 
-.brand-logo,
-.brand-lockup {
+.brand-logo {
   display: block;
   object-fit: contain;
   object-position: center;
-}
-
-.brand-lockup {
-  display: grid;
-  place-items: center;
-}
-
-.brand-lockup img {
-  grid-area: 1 / 1;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center;
-}
-
-.brand-on-day {
-  display: none;
-}
-
-:root.theme-day .brand-on-night {
-  display: none;
-}
-
-:root.theme-day .brand-on-day {
-  display: block;
 }
 
 .brand-hero,
