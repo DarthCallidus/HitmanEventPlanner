@@ -60,7 +60,7 @@ function Gig({ eventId }: { eventId: string }) {
       </Link>
       <p className="mt-4 text-sm text-muted">Read only. Ask the admin if something needs to change.</p>
       <div className="mt-6">
-        <EventEditor event={event} readOnly onSaved={() => undefined} />
+        <EventEditor event={event} readOnly hideSections={["booth360"]} onSaved={() => undefined} />
       </div>
     </main>
   );

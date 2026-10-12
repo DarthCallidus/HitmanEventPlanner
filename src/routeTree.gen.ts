@@ -18,6 +18,8 @@ import { Route as BoothEventIdRouteImport } from './routes/booth/$eventId'
 import { Route as BriefEventIdRouteImport } from './routes/brief/$eventId'
 import { Route as DjIndexRouteImport } from './routes/dj/index'
 import { Route as DjEventIdRouteImport } from './routes/dj/$eventId'
+import { Route as OperatorIndexRouteImport } from './routes/operator/index'
+import { Route as OperatorEventIdRouteImport } from './routes/operator/$eventId'
 import { Route as PortalIndexRouteImport } from './routes/portal/index'
 import { Route as PortalEventIdRouteImport } from './routes/portal/$eventId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -67,6 +69,16 @@ const DjEventIdRoute = DjEventIdRouteImport.update({
   path: '/dj/$eventId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OperatorIndexRoute = OperatorIndexRouteImport.update({
+  id: '/operator/',
+  path: '/operator/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperatorEventIdRoute = OperatorEventIdRouteImport.update({
+  id: '/operator/$eventId',
+  path: '/operator/$eventId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PortalIndexRoute = PortalIndexRouteImport.update({
   id: '/portal/',
   path: '/portal/',
@@ -91,9 +103,11 @@ export interface FileRoutesByFullPath {
   '/booth/$eventId': typeof BoothEventIdRoute
   '/brief/$eventId': typeof BriefEventIdRoute
   '/dj/$eventId': typeof DjEventIdRoute
+  '/operator/$eventId': typeof OperatorEventIdRoute
   '/portal/$eventId': typeof PortalEventIdRoute
   '/admin/': typeof AdminIndexRoute
   '/dj/': typeof DjIndexRoute
+  '/operator/': typeof OperatorIndexRoute
   '/portal/': typeof PortalIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -105,9 +119,11 @@ export interface FileRoutesByTo {
   '/booth/$eventId': typeof BoothEventIdRoute
   '/brief/$eventId': typeof BriefEventIdRoute
   '/dj/$eventId': typeof DjEventIdRoute
+  '/operator/$eventId': typeof OperatorEventIdRoute
   '/portal/$eventId': typeof PortalEventIdRoute
   '/admin': typeof AdminIndexRoute
   '/dj': typeof DjIndexRoute
+  '/operator': typeof OperatorIndexRoute
   '/portal': typeof PortalIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -120,9 +136,11 @@ export interface FileRoutesById {
   '/booth/$eventId': typeof BoothEventIdRoute
   '/brief/$eventId': typeof BriefEventIdRoute
   '/dj/$eventId': typeof DjEventIdRoute
+  '/operator/$eventId': typeof OperatorEventIdRoute
   '/portal/$eventId': typeof PortalEventIdRoute
   '/admin/': typeof AdminIndexRoute
   '/dj/': typeof DjIndexRoute
+  '/operator/': typeof OperatorIndexRoute
   '/portal/': typeof PortalIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -136,9 +154,11 @@ export interface FileRouteTypes {
     | '/booth/$eventId'
     | '/brief/$eventId'
     | '/dj/$eventId'
+    | '/operator/$eventId'
     | '/portal/$eventId'
     | '/admin/'
     | '/dj/'
+    | '/operator/'
     | '/portal/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -150,9 +170,11 @@ export interface FileRouteTypes {
     | '/booth/$eventId'
     | '/brief/$eventId'
     | '/dj/$eventId'
+    | '/operator/$eventId'
     | '/portal/$eventId'
     | '/admin'
     | '/dj'
+    | '/operator'
     | '/portal'
     | '/api/auth/$'
   id:
@@ -164,9 +186,11 @@ export interface FileRouteTypes {
     | '/booth/$eventId'
     | '/brief/$eventId'
     | '/dj/$eventId'
+    | '/operator/$eventId'
     | '/portal/$eventId'
     | '/admin/'
     | '/dj/'
+    | '/operator/'
     | '/portal/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -179,9 +203,11 @@ export interface RootRouteChildren {
   BoothEventIdRoute: typeof BoothEventIdRoute
   BriefEventIdRoute: typeof BriefEventIdRoute
   DjEventIdRoute: typeof DjEventIdRoute
+  OperatorEventIdRoute: typeof OperatorEventIdRoute
   PortalEventIdRoute: typeof PortalEventIdRoute
   AdminIndexRoute: typeof AdminIndexRoute
   DjIndexRoute: typeof DjIndexRoute
+  OperatorIndexRoute: typeof OperatorIndexRoute
   PortalIndexRoute: typeof PortalIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -251,6 +277,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DjEventIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/operator/': {
+      id: '/operator/'
+      path: '/operator'
+      fullPath: '/operator/'
+      preLoaderRoute: typeof OperatorIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operator/$eventId': {
+      id: '/operator/$eventId'
+      path: '/operator/$eventId'
+      fullPath: '/operator/$eventId'
+      preLoaderRoute: typeof OperatorEventIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/portal/': {
       id: '/portal/'
       path: '/portal'
@@ -283,9 +323,11 @@ const rootRouteChildren: RootRouteChildren = {
   BoothEventIdRoute: BoothEventIdRoute,
   BriefEventIdRoute: BriefEventIdRoute,
   DjEventIdRoute: DjEventIdRoute,
+  OperatorEventIdRoute: OperatorEventIdRoute,
   PortalEventIdRoute: PortalEventIdRoute,
   AdminIndexRoute: AdminIndexRoute,
   DjIndexRoute: DjIndexRoute,
+  OperatorIndexRoute: OperatorIndexRoute,
   PortalIndexRoute: PortalIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

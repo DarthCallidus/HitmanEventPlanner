@@ -11,6 +11,7 @@ import { lockDayTheme, unlockDayTheme } from "@/lib/theme";
 export function homeFor(role: Profile["role"]) {
   if (role === "admin") return "/admin";
   if (role === "dj") return "/dj";
+  if (role === "operator") return "/operator";
   return "/portal";
 }
 

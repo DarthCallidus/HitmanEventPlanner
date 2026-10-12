@@ -22,11 +22,17 @@ export function scoreDetails(details: EventDetails, venue = ""): {
   sections: SectionScore[];
   missing: string[];
 } {
+  const other = details.kind === "other";
   const day = details.day;
-  const dayState = stateOf(
-    hasText(day.coupleNames, day.ceremonyLocation, day.receptionLocation, day.ceremonyStart, day.coordinatorName, day.coordinatorPhone, day.liveMusicians, venue),
-    hasText(day.coupleNames) && hasText(day.ceremonyStart) && hasText(day.ceremonyLocation, venue),
-  );
+  const dayState = other
+    ? stateOf(
+        hasText(day.coupleNames, day.ceremonyLocation, day.ceremonyStart, day.endTime, day.coordinatorName, day.coordinatorPhone, venue),
+        hasText(day.coupleNames) && hasText(day.ceremonyStart, day.ceremonyLocation, venue),
+      )
+    : stateOf(
+        hasText(day.coupleNames, day.ceremonyLocation, day.receptionLocation, day.ceremonyStart, day.coordinatorName, day.coordinatorPhone, day.liveMusicians, venue),
+        hasText(day.coupleNames) && hasText(day.ceremonyStart) && hasText(day.ceremonyLocation, venue),
+      );
 
   const ceremony = stateOf(
     details.ceremony.family.some((row) => hasText(row.value)) || details.ceremony.music.some((row) => hasText(row.song, row.link)),
@@ -57,19 +63,32 @@ export function scoreDetails(details: EventDetails, venue = ""): {
 
   const taste = details.taste;
   const lists = taste.playlists ?? [];
-  const tasteState = stateOf(
-    hasText(taste.doNotPlay, taste.brideArtists, taste.groomArtists, taste.brideGrad, taste.groomGrad) ||
-      taste.genres.some((genre) => hasText(genre.rank)) ||
-      lists.some((row) => hasText(row.name, row.link)),
-    (hasText(taste.brideArtists, taste.groomArtists) && taste.genres.some((genre) => hasText(genre.rank))) || lists.some((row) => hasText(row.link)),
-  );
+  const tasteState = other
+    ? stateOf(
+        hasText(taste.doNotPlay, taste.brideArtists) || taste.genres.some((genre) => hasText(genre.rank)) || lists.some((row) => hasText(row.name, row.link)),
+        hasText(taste.doNotPlay, taste.brideArtists) || taste.genres.some((genre) => hasText(genre.rank)) || lists.some((row) => hasText(row.link)),
+      )
+    : stateOf(
+        hasText(taste.doNotPlay, taste.brideArtists, taste.groomArtists, taste.brideGrad, taste.groomGrad) ||
+          taste.genres.some((genre) => hasText(genre.rank)) ||
+          lists.some((row) => hasText(row.name, row.link)),
+        (hasText(taste.brideArtists, taste.groomArtists) && taste.genres.some((genre) => hasText(genre.rank))) || lists.some((row) => hasText(row.link)),
+      );
 
   const rest = details.rest;
-  const restState = stateOf(
-    hasText(rest.longestMarried, rest.exitPlan, rest.alcohol, rest.blessing, rest.requests, rest.timelinePdfName ?? "") ||
-      rest.vendors.some((row) => hasText(row.name)) ||
-      rest.timeline.some((row) => hasText(row.label, row.time)),
-    rest.timeline.filter((row) => hasText(row.label) && hasText(row.time)).length >= 3 || hasText(rest.timelinePdfName ?? ""),
+  const restState = other
+    ? stateOf(hasText(rest.requests, rest.timelinePdfName ?? ""), hasText(rest.requests) || hasText(rest.timelinePdfName ?? ""))
+    : stateOf(
+        hasText(rest.longestMarried, rest.exitPlan, rest.alcohol, rest.blessing, rest.requests, rest.timelinePdfName ?? "") ||
+          rest.vendors.some((row) => hasText(row.name)) ||
+          rest.timeline.some((row) => hasText(row.label, row.time)),
+        rest.timeline.filter((row) => hasText(row.label) && hasText(row.time)).length >= 3 || hasText(rest.timelinePdfName ?? ""),
+      );
+
+  const booth = details.booth360;
+  const booth360 = stateOf(
+    hasText(booth.when, booth.where, booth.start, booth.end, booth.notes),
+    hasText(booth.where) && hasText(booth.start, booth.when),
   );
 
   const byId: Record<SectionId, SectionState> = {
@@ -80,11 +99,16 @@ export function scoreDetails(details: EventDetails, venue = ""): {
     toasts,
     taste: tasteState,
     rest: restState,
+    booth360,
   };
 
-  const sections: SectionScore[] = SECTIONS.map((section) => ({
+  const sections: SectionScore[] = SECTIONS.filter((section) => {
+    if (section.id === "booth360") return details.booth360.enabled;
+    if (other) return section.id === "day" || section.id === "taste" || section.id === "rest";
+    return true;
+  }).map((section) => ({
     id: section.id,
-    label: section.label,
+    label: other && section.id === "taste" ? "Music" : other && section.id === "rest" ? "Timeline and notes" : section.label,
     state: byId[section.id],
   }));
   const done = sections.filter((section) => section.state === "complete").length;

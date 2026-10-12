@@ -6,7 +6,6 @@ import { clearTimelinePdf, saveDetails, saveTimelinePdf } from "@/lib/events/ser
 import { STATE_LABEL, scoreDetails } from "@/lib/events/completion";
 import { errText, formatLongDate } from "@/lib/events/format";
 import type { EventDetails, EventRecord, IntroPair, IntroPerson, NameLine, SectionId, SongCue, VendorLine } from "@/lib/events/types";
-import { SECTIONS } from "@/lib/events/types";
 
 const POLICY =
   "Song change requests made within 48 hours of the wedding day cannot be guaranteed. We will do everything possible to accommodate. Last-minute changes with multiple weddings in a weekend and not much turnaround time. We cannot always ensure that we can make changes last minute. Please be sure to text us if you have changed anything on this worksheet after our call a week before your wedding day. This page saves as you go, so we stay on the same page. Any questions, feel free to shoot us a text.";
@@ -40,10 +39,12 @@ export function EventEditor({
   event,
   readOnly,
   onSaved,
+  hideSections = [],
 }: {
   event: EventRecord;
   readOnly: boolean;
   onSaved: () => void;
+  hideSections?: SectionId[];
 }) {
   const [details, setDetails] = useState<EventDetails>(() => alignSavedDetails(event.details));
   const [active, setActive] = useState<SectionId | null>(null);
@@ -104,14 +105,18 @@ export function EventEditor({
   }
 
   const score = scoreDetails(details, event.venue);
-  const current = score.sections.find((section) => section.id === active);
+  const sections = score.sections.filter((section) => !hideSections.includes(section.id));
+  const done = sections.filter((section) => section.state === "complete").length;
+  const half = sections.filter((section) => section.state === "progress").length;
+  const percent = sections.length ? Math.round(((done + half * 0.5) / sections.length) * 100) : 0;
+  const current = sections.find((section) => section.id === active);
 
   if (!active) {
     return (
       <div className="space-y-3">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <p className="font-display text-4xl tabular-nums">{score.percent}%</p>
+            <p className="font-display text-4xl tabular-nums">{percent}%</p>
             <p className="text-sm text-muted">Planning complete</p>
           </div>
           <p className="text-sm text-faint">
@@ -119,10 +124,10 @@ export function EventEditor({
           </p>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-line">
-          <div className="h-full bg-accent" style={{ width: `${score.percent}%` }} />
+          <div className="h-full bg-accent" style={{ width: `${percent}%` }} />
         </div>
         <div className="space-y-2">
-          {score.sections.map((section) => (
+          {sections.map((section) => (
             <button
               key={section.id}
               type="button"
@@ -150,7 +155,7 @@ export function EventEditor({
           {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Not saved" : current ? STATE_LABEL[current.state] : ""}
         </p>
       </div>
-      <h2 className="font-display text-3xl">{SECTIONS.find((section) => section.id === active)?.label}</h2>
+      <h2 className="font-display text-3xl">{sections.find((section) => section.id === active)?.label}</h2>
       {saveState === "error" && <p className="text-sm text-danger">{saveError}</p>}
       <fieldset disabled={readOnly} className="space-y-4 disabled:opacity-70">
         {active === "day" && (
@@ -195,18 +200,45 @@ export function EventEditor({
             onChange={(rest) => edit("rest", (current) => ({ ...current, rest }))}
           />
         )}
+        {active === "booth360" && (
+          <Booth360Form
+            details={details}
+            onChange={(booth360) => edit("booth360", (current) => ({ ...current, booth360 }))}
+          />
+        )}
       </fieldset>
       <button
         type="button"
         className="btn btn-block"
         onClick={() => {
-          const index = SECTIONS.findIndex((section) => section.id === active);
-          const next = SECTIONS[index + 1];
-          void persist(active).then(() => setActive(next ? next.id : null));
+          const order = sections.map((section) => section.id);
+          const index = order.indexOf(active);
+          const next = order[index + 1];
+          void persist(active).then(() => setActive(next ?? null));
         }}
       >
         Save and continue
       </button>
+    </div>
+  );
+}
+
+function Booth360Form({
+  details,
+  onChange,
+}: {
+  details: EventDetails;
+  onChange: (booth360: EventDetails["booth360"]) => void;
+}) {
+  const booth = details.booth360;
+  const set = (key: "when" | "where" | "start" | "end" | "notes", value: string) => onChange({ ...booth, [key]: value });
+  return (
+    <div className="space-y-3">
+      <Text label="When it runs" value={booth.when} onChange={(value) => set("when", value)} />
+      <Text label="Where it sits" value={booth.where} onChange={(value) => set("where", value)} />
+      <Text label="Start" value={booth.start} onChange={(value) => set("start", value)} />
+      <Text label="End" value={booth.end} onChange={(value) => set("end", value)} />
+      <Text label="Notes" area value={booth.notes} onChange={(value) => set("notes", value)} />
     </div>
   );
 }
@@ -222,6 +254,25 @@ function DayForm({
 }) {
   const day = details.day;
   const set = (key: keyof EventDetails["day"], value: string) => onChange({ ...day, [key]: value });
+  if (details.kind === "other") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted">Date of the event · {formatLongDate(eventDate)}</p>
+        <Text label="Host or contact" value={day.coupleNames} onChange={(value) => set("coupleNames", value)} />
+        <Text label="Location" value={day.ceremonyLocation} onChange={(value) => set("ceremonyLocation", value)} />
+        <Text label="Start time" value={day.ceremonyStart} onChange={(value) => set("ceremonyStart", value)} />
+        <Text label="End time" value={day.endTime} onChange={(value) => set("endTime", value)} />
+        <div className="space-y-3 rounded-2xl border border-line bg-surface p-4">
+          <p className="text-sm text-muted">On-site contact, if you have one</p>
+          <Text label="Name" value={day.coordinatorName} onChange={(value) => set("coordinatorName", value)} />
+          <label className="block">
+            <span className="mb-1.5 block text-sm text-muted">Phone number</span>
+            <input className="field" inputMode="tel" value={day.coordinatorPhone} onChange={(event) => set("coordinatorPhone", event.target.value)} />
+          </label>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted">Date of wedding · {formatLongDate(eventDate)}</p>
@@ -864,6 +915,30 @@ function TasteForm({
   });
   const setGenres = (next: typeof genres) =>
     onChange({ ...taste, genres: next.map((genre, index) => ({ ...genre, rank: String(index + 1) })) });
+  if (details.kind === "other") {
+    return (
+      <div className="space-y-5">
+        <PlaylistForm rows={taste.playlists ?? []} onChange={(playlists) => onChange({ ...taste, playlists })} />
+        <Text label="Do not play" area value={taste.doNotPlay} onChange={(doNotPlay) => onChange({ ...taste, doNotPlay })} />
+        <Text label="Artists" area value={taste.brideArtists} onChange={(brideArtists) => onChange({ ...taste, brideArtists })} />
+        <p className="pt-2 text-sm text-muted">Genres, most wanted at the top. Move a row instead of numbering it.</p>
+        <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+          {genres.map((genre, index) => (
+            <div key={genre.id} className="flex items-center gap-2 border-b border-line px-3 py-2 last:border-b-0">
+              <span className="w-5 tabular-nums text-sm text-faint">{index + 1}</span>
+              <span className="min-w-0 flex-1 text-sm">{genre.label}</span>
+              <button type="button" className="btn-line" disabled={index === 0} onClick={() => setGenres(move(genres, index, -1))}>
+                Up
+              </button>
+              <button type="button" className="btn-line" disabled={index === genres.length - 1} onClick={() => setGenres(move(genres, index, 1))}>
+                Down
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="space-y-5">
       <PlaylistForm
@@ -908,6 +983,14 @@ function RestForm({
   const rest = details.rest;
   const set = (key: "longestMarried" | "exitPlan" | "alcohol" | "blessing" | "requests", value: string) =>
     onChange({ ...rest, [key]: value });
+  if (details.kind === "other") {
+    return (
+      <div className="space-y-5">
+        <Text label="Notes" area value={rest.requests} onChange={(value) => set("requests", value)} />
+        <TimelinePdf eventId={eventId} name={rest.timelinePdfName || ""} onName={(timelinePdfName) => onChange({ ...rest, timelinePdfName })} />
+      </div>
+    );
+  }
   return (
     <div className="space-y-5">
       <Text label="Longest married couple, with how many years" value={rest.longestMarried} onChange={(value) => set("longestMarried", value)} />

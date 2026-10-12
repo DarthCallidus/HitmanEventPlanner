@@ -2,8 +2,6 @@ import { useState } from "react";
 import { authClient, GROK_PROVIDERS, signIn } from "@/lib/auth/client";
 
 export function AuthForm() {
-  const [mode, setMode] = useState<"in" | "up">("in");
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -14,25 +12,15 @@ export function AuthForm() {
     setError(null);
     setPending(true);
     try {
-      const result =
-        mode === "up"
-          ? await authClient.signUp.email({
-              name: name.trim() || "Admin",
-              email: email.trim(),
-              password,
-              callbackURL: "/",
-            })
-          : await authClient.signIn.email({
-              email: email.trim(),
-              password,
-              callbackURL: "/",
-            });
+      const result = await authClient.signIn.email({
+        email: email.trim(),
+        password,
+        callbackURL: "/",
+      });
       if (result.error) {
         const detail = `${result.error.code ?? ""} ${result.error.message ?? ""}`;
-        if (mode === "in" && /invalid email or password/i.test(detail)) {
-          setError("No account for that email, or the password is wrong. First time? Tap Create account.");
-        } else if (/user already exists|already exists/i.test(detail)) {
-          setError("That email already has an account. Switch to Sign in.");
+        if (/invalid email or password/i.test(detail)) {
+          setError("No account for that email, or the password is wrong.");
         } else {
           setError(result.error.message ?? "Sign-in failed");
         }
@@ -48,29 +36,7 @@ export function AuthForm() {
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-5">
-      <div className="split">
-        <button
-          type="button"
-          className={mode === "in" ? "btn" : "btn-line"}
-          onClick={() => setMode("in")}
-        >
-          Sign in
-        </button>
-        <button
-          type="button"
-          className={mode === "up" ? "btn" : "btn-line"}
-          onClick={() => setMode("up")}
-        >
-          Create account
-        </button>
-      </div>
-      <form className="mt-4 space-y-3" onSubmit={submit}>
-        {mode === "up" && (
-          <label className="block">
-            <span className="mb-1.5 block text-sm text-muted">Your name</span>
-            <input className="field" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-          </label>
-        )}
+      <form className="space-y-3" onSubmit={submit}>
         <label className="block">
           <span className="mb-1.5 block text-sm text-muted">Email</span>
           <input
@@ -89,23 +55,14 @@ export function AuthForm() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoComplete={mode === "up" ? "new-password" : "current-password"}
+            autoComplete="current-password"
             minLength={8}
             required
           />
         </label>
-        {mode === "in" ? (
-          <p className="text-sm text-faint">
-            First time here? Tap Create account. Password needs 8 characters.
-          </p>
-        ) : (
-          <p className="text-sm text-faint">
-            The first account becomes admin. Clients get their own login from the event.
-          </p>
-        )}
         {error && <p className="text-sm text-danger">{error}</p>}
         <button className="btn btn-block" type="submit" disabled={pending}>
-          {pending ? "Working…" : mode === "up" ? "Create admin account" : "Enter"}
+          {pending ? "Working…" : "Enter"}
         </button>
       </form>
       <div className="mt-4 space-y-2">

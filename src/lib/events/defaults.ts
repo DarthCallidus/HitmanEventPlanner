@@ -164,6 +164,7 @@ export function alignSavedDetails(details: EventDetails): EventDetails {
           ceremonyLocation: legacyDay.ceremonyLocation,
           receptionLocation: legacyDay.receptionLocation,
           ceremonyStart: legacyDay.ceremonyStart,
+          endTime: legacyDay.endTime || "",
           coordinatorName: fromOld.name,
           coordinatorPhone: fromOld.phone,
           liveMusicians: legacyDay.liveMusicians,
@@ -309,11 +310,13 @@ export function normalizeDetails(input: unknown): EventDetails {
     : FAMILY.map((label) => ({ label, value: "" }));
 
   const normalized: EventDetails = {
+    kind: raw.kind === "other" ? "other" : "wedding",
     day: {
       coupleNames: str(dayIn.coupleNames) || str(basics.coupleNames),
       ceremonyLocation: str(dayIn.ceremonyLocation) || str(ceremony.location) || str(basics.ceremonyLocation),
       receptionLocation: str(dayIn.receptionLocation) || str(basics.receptionLocation),
       ceremonyStart: str(dayIn.ceremonyStart) || str(ceremony.startTime),
+      endTime: str(dayIn.endTime),
       coordinatorName: str(dayIn.coordinatorName) || splitCoordinator(str(dayIn.coordinator) || str(ceremony.coordinator) || str(basics.plannerName)).name,
       coordinatorPhone:
         str(dayIn.coordinatorPhone) ||
@@ -399,6 +402,14 @@ export function normalizeDetails(input: unknown): EventDetails {
           return { id: str(row.id) || rid(), label: str(row.label), time: str(row.time), notes: str(row.notes) };
         },
       ),
+    },
+    booth360: {
+      enabled: obj(raw.booth360).enabled === true,
+      when: str(obj(raw.booth360).when),
+      where: str(obj(raw.booth360).where),
+      start: str(obj(raw.booth360).start),
+      end: str(obj(raw.booth360).end),
+      notes: str(obj(raw.booth360).notes),
     },
   };
   return { ...normalized, toasts: linkToasts(normalized.toasts, normalized.introductions) };

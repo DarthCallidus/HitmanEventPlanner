@@ -28,6 +28,7 @@ export const SECTIONS = [
   { id: "toasts", label: "Toasts" },
   { id: "taste", label: "Music taste" },
   { id: "rest", label: "The rest" },
+  { id: "booth360", label: "360 photobooth" },
 ] as const;
 
 export type SectionId = (typeof SECTIONS)[number]["id"];
@@ -102,11 +103,13 @@ export type TimelineItem = {
 };
 
 export type EventDetails = {
+  kind: "wedding" | "other";
   day: {
     coupleNames: string;
     ceremonyLocation: string;
     receptionLocation: string;
     ceremonyStart: string;
+    endTime: string;
     coordinatorName: string;
     coordinatorPhone: string;
     liveMusicians: string;
@@ -150,11 +153,19 @@ export type EventDetails = {
     timelinePdfName: string;
     timeline: TimelineItem[];
   };
+  booth360: {
+    enabled: boolean;
+    when: string;
+    where: string;
+    start: string;
+    end: string;
+    notes: string;
+  };
 };
 
 export type Profile = {
   userId: string;
-  role: "admin" | "client" | "dj";
+  role: "admin" | "client" | "dj" | "operator";
   displayName: string;
   email: string;
 };
@@ -169,8 +180,10 @@ export type EventSummary = {
   clientUserId: string | null;
   clientName: string | null;
   djUserId: string | null;
+  djUserIds: string[];
   djName: string | null;
   couple: string;
+  kind: "wedding" | "other";
   percent: number;
   missing: string[];
 };
@@ -195,9 +208,11 @@ export type EventRecord = {
   clientUserId: string | null;
   clientName: string | null;
   djUserId: string | null;
+  djUserIds: string[];
   djName: string | null;
   boothNotes: string;
   contractPdfName: string;
+  operatorUserIds: string[];
   details: EventDetails;
   changes: ChangeRow[];
 };
@@ -206,4 +221,6 @@ export type ClientRow = {
   userId: string;
   displayName: string;
   email: string;
+  password: string;
+  events: string[];
 };

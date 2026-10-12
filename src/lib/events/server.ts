@@ -45,7 +45,7 @@ async function ensureProfile(userId: string): Promise<Profile> {
   if (!row) throw new Error("Could not open your account");
   return {
     userId: row.user_id,
-    role: row.role === "admin" ? "admin" : row.role === "dj" ? "dj" : "client",
+    role: row.role === "admin" ? "admin" : row.role === "dj" ? "dj" : row.role === "operator" ? "operator" : "client",
     displayName: row.display_name || name,
     email: row.email ?? email,
   };
@@ -53,6 +53,44 @@ async function ensureProfile(userId: string): Promise<Profile> {
 
 function assertAdmin(profile: Profile) {
   if (profile.role !== "admin") throw new Error("Admin only");
+}
+
+async function writeDjs(eventId: string, ids: string[]) {
+  const sql = await getSql();
+  if (ids.length) {
+    for (const id of ids) {
+      const found = await sql<{ user_id: string }>`
+        select user_id from profiles where user_id = ${id} and role = 'dj'
+      `;
+      if (!found[0]) throw new Error("That DJ account was not found");
+    }
+  }
+  await sql`delete from event_djs where event_id = ${eventId}`;
+  for (const id of ids) {
+    await sql`insert into event_djs (event_id, user_id) values (${eventId}, ${id})`;
+  }
+}
+
+async function writeOperators(eventId: string, ids: string[]) {
+  const sql = await getSql();
+  for (const id of ids) {
+    const found = await sql<{ user_id: string }>`
+      select user_id from profiles where user_id = ${id} and role = 'operator'
+    `;
+    if (!found[0]) throw new Error("That operator account was not found");
+  }
+  await sql`delete from event_operators where event_id = ${eventId}`;
+  for (const id of ids) {
+    await sql`insert into event_operators (event_id, user_id) values (${eventId}, ${id})`;
+  }
+}
+
+function djIdsInput(raw: Record<string, unknown>): string[] {
+  const listed = Array.isArray(raw.djUserIds)
+    ? raw.djUserIds.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+    : [];
+  const single = typeof raw.djUserId === "string" ? raw.djUserId.trim() : "";
+  return [...new Set(listed.length ? listed : single ? [single] : [])];
 }
 
 function stamp(value: unknown): string {
@@ -81,15 +119,26 @@ type EventRow = {
   client_user_id: string | null;
   client_name: string | null;
   dj_user_id?: string | null;
+  dj_ids?: string | null;
   dj_name?: string | null;
   booth_notes: string | null;
   contract_pdf_name?: string | null;
   details: unknown;
 };
 
+function djIdsFrom(row: EventRow): string[] {
+  const extra = (row.dj_ids ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const first = row.dj_user_id ? [row.dj_user_id] : [];
+  return [...new Set([...first, ...extra])];
+}
+
 function summaryFrom(row: EventRow): EventSummary {
   const details = normalizeDetails(row.details);
   const scored = scoreDetails(details, row.venue);
+  const ids = djIdsFrom(row);
   return {
     id: row.id,
     title: row.title,
@@ -99,9 +148,11 @@ function summaryFrom(row: EventRow): EventSummary {
     updatedAt: stamp(row.updated_at),
     clientUserId: row.client_user_id,
     clientName: row.client_name,
-    djUserId: row.dj_user_id ?? null,
+    djUserId: ids[0] ?? null,
+    djUserIds: ids,
     djName: row.dj_name ?? null,
-    couple: details.day.coupleNames,
+    couple: details.kind === "other" ? "" : details.day.coupleNames,
+    kind: details.kind,
     percent: scored.percent,
     missing: scored.missing,
   };
@@ -118,8 +169,23 @@ function ensureFileColumns() {
       await sql`alter table events add column if not exists contract_pdf bytea`;
       await sql`alter table events add column if not exists contract_pdf_name text not null default ''`;
       await sql`alter table events add column if not exists dj_user_id text`;
+      await sql`alter table profiles add column if not exists issued_password text not null default ''`;
+      await sql`
+        create table if not exists event_djs (
+          event_id text not null references events (id) on delete cascade,
+          user_id text not null,
+          primary key (event_id, user_id)
+        )
+      `;
+      await sql`
+        create table if not exists event_operators (
+          event_id text not null references events (id) on delete cascade,
+          user_id text not null,
+          primary key (event_id, user_id)
+        )
+      `;
       await sql`alter table profiles drop constraint if exists profiles_role_check`;
-      await sql`alter table profiles add constraint profiles_role_check check (role in ('admin', 'client', 'dj'))`;
+      await sql`alter table profiles add constraint profiles_role_check check (role in ('admin', 'client', 'dj', 'operator'))`;
     } catch (error) {
       fileColumnsReady = null;
       throw error;
@@ -134,7 +200,8 @@ async function loadEvent(id: string, profile: Profile): Promise<EventRow> {
   const rows = await sql<EventRow>`
     select e.id, e.title, e.event_date, e.venue, e.status, e.locked_at, e.created_at,
            e.updated_at, e.created_by, e.client_user_id, e.dj_user_id, e.booth_notes, e.contract_pdf_name, e.details,
-           p.display_name as client_name, d.display_name as dj_name
+           p.display_name as client_name, d.display_name as dj_name,
+           (select string_agg(ed.user_id, ',') from event_djs ed where ed.event_id = e.id) as dj_ids
     from events e
     left join profiles p on p.user_id = e.client_user_id
     left join profiles d on d.user_id = e.dj_user_id
@@ -142,7 +209,17 @@ async function loadEvent(id: string, profile: Profile): Promise<EventRow> {
       and (
         ${profile.role} = 'admin'
         or (${profile.role} = 'client' and e.client_user_id = ${profile.userId})
-        or (${profile.role} = 'dj' and e.dj_user_id = ${profile.userId})
+        or (
+          ${profile.role} = 'dj'
+          and (
+            e.dj_user_id = ${profile.userId}
+            or exists (select 1 from event_djs ed where ed.event_id = e.id and ed.user_id = ${profile.userId})
+          )
+        )
+        or (
+          ${profile.role} = 'operator'
+          and exists (select 1 from event_operators eo where eo.event_id = e.id and eo.user_id = ${profile.userId})
+        )
       )
   `;
   const row = rows[0];
@@ -180,13 +257,17 @@ async function recordFrom(row: EventRow, profile: Profile): Promise<EventRecord>
       createdAt: stamp(log.created_at),
     }));
   }
+  const operators = await sql<{ user_id: string }>`
+    select user_id from event_operators where event_id = ${row.id}
+  `;
   return {
     ...summaryFields(row),
     lockedAt: row.locked_at ? stamp(row.locked_at) : null,
     createdAt: stamp(row.created_at),
     createdBy: row.created_by,
     boothNotes: row.booth_notes ?? "",
-    contractPdfName: profile.role === "dj" ? "" : (row.contract_pdf_name ?? ""),
+    contractPdfName: profile.role === "dj" || profile.role === "operator" ? "" : (row.contract_pdf_name ?? ""),
+    operatorUserIds: operators.map((item) => item.user_id),
     details: normalizeDetails(row.details),
     changes,
   };
@@ -204,6 +285,7 @@ function summaryFields(row: EventRow) {
     clientUserId: summary.clientUserId,
     clientName: summary.clientName,
     djUserId: summary.djUserId,
+    djUserIds: summary.djUserIds,
     djName: summary.djName,
   };
 }
@@ -233,13 +315,24 @@ export const listEvents = createServerFn({ method: "GET" })
     const rows = await sql<EventRow>`
       select e.id, e.title, e.event_date, e.venue, e.status, e.locked_at, e.created_at,
              e.updated_at, e.created_by, e.client_user_id, e.dj_user_id, e.booth_notes, e.details,
-             p.display_name as client_name, d.display_name as dj_name
+             p.display_name as client_name, d.display_name as dj_name,
+             (select string_agg(ed.user_id, ',') from event_djs ed where ed.event_id = e.id) as dj_ids
       from events e
       left join profiles p on p.user_id = e.client_user_id
       left join profiles d on d.user_id = e.dj_user_id
       where ${profile.role} = 'admin'
          or (${profile.role} = 'client' and e.client_user_id = ${profile.userId})
-         or (${profile.role} = 'dj' and e.dj_user_id = ${profile.userId})
+         or (
+           ${profile.role} = 'dj'
+           and (
+             e.dj_user_id = ${profile.userId}
+             or exists (select 1 from event_djs ed where ed.event_id = e.id and ed.user_id = ${profile.userId})
+           )
+         )
+         or (
+           ${profile.role} = 'operator'
+           and exists (select 1 from event_operators eo where eo.event_id = e.id and eo.user_id = ${profile.userId})
+         )
       order by e.event_date asc nulls last, e.created_at asc
     `;
     return rows.map(summaryFrom);
@@ -264,7 +357,8 @@ type CreateInput = {
   venue: string;
   status: EventStatus;
   details: unknown;
-  djUserId: string | null;
+  djUserIds: string[];
+  kind: "wedding" | "other";
 };
 
 export const createEvent = createServerFn({ method: "POST" })
@@ -276,24 +370,18 @@ export const createEvent = createServerFn({ method: "POST" })
     const venue = typeof raw.venue === "string" ? raw.venue.trim() : "";
     const status = asStatus(raw.status ?? "new");
     if (!(STATUSES as readonly string[]).includes(status)) throw new Error("Bad status");
-    const dj = typeof raw.djUserId === "string" ? raw.djUserId.trim() : "";
-    return { title, eventDate, venue, status, details: raw.details ?? {}, djUserId: dj || null };
+    const kind = raw.kind === "other" ? "other" : "wedding";
+    return { title, eventDate, venue, status, details: raw.details ?? {}, djUserIds: djIdsInput(raw), kind };
   })
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const profile = await ensureProfile(context.userId);
     assertAdmin(profile);
     await ensureFileColumns();
-    const details = normalizeDetails(data.details);
+    const details = normalizeDetails({ ...(typeof data.details === "object" && data.details ? data.details : {}), kind: data.kind });
     const id = rid();
     const sql = await getSql();
     const lockedAt = data.status === "locked" ? new Date().toISOString() : null;
-    if (data.djUserId) {
-      const djs = await sql<{ user_id: string }>`
-        select user_id from profiles where user_id = ${data.djUserId} and role = 'dj'
-      `;
-      if (!djs[0]) throw new Error("That DJ account was not found");
-    }
     await sql`
       insert into events (
         id, created_by, title, event_date, venue, status, locked_at, details, dj_user_id
@@ -306,9 +394,10 @@ export const createEvent = createServerFn({ method: "POST" })
         ${data.status},
         ${lockedAt},
         ${JSON.stringify(details)}::jsonb,
-        ${data.djUserId}
+        ${data.djUserIds[0] ?? null}
       )
     `;
+    await writeDjs(id, data.djUserIds);
     await logChange(id, profile, "Created the event");
     return { id };
   });
@@ -320,7 +409,9 @@ type MetaInput = {
   venue: string;
   status: EventStatus;
   clientUserId: string | null;
-  djUserId: string | null;
+  djUserIds: string[];
+  booth360: boolean;
+  operatorUserIds: string[];
 };
 
 export const updateEventMeta = createServerFn({ method: "POST" })
@@ -330,7 +421,6 @@ export const updateEventMeta = createServerFn({ method: "POST" })
     const title = typeof raw.title === "string" ? raw.title.trim() : "";
     if (!id || !title) throw new Error("Event name is required");
     const client = typeof raw.clientUserId === "string" ? raw.clientUserId.trim() : "";
-    const dj = typeof raw.djUserId === "string" ? raw.djUserId.trim() : "";
     return {
       id,
       title,
@@ -338,7 +428,13 @@ export const updateEventMeta = createServerFn({ method: "POST" })
       venue: typeof raw.venue === "string" ? raw.venue.trim() : "",
       status: asStatus(raw.status),
       clientUserId: client || null,
-      djUserId: dj || null,
+      djUserIds: djIdsInput(raw),
+      booth360: raw.booth360 === true,
+      operatorUserIds: [...new Set(
+        Array.isArray(raw.operatorUserIds)
+          ? raw.operatorUserIds.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+          : [],
+      )],
     };
   })
   .middleware([authMiddleware])
@@ -353,18 +449,16 @@ export const updateEventMeta = createServerFn({ method: "POST" })
       `;
       if (!clients[0]) throw new Error("That client account was not found");
     }
-    if (data.djUserId) {
-      const djs = await sql<{ user_id: string }>`
-        select user_id from profiles where user_id = ${data.djUserId} and role = 'dj'
-      `;
-      if (!djs[0]) throw new Error("That DJ account was not found");
-    }
+    await writeDjs(data.id, data.djUserIds);
+    await writeOperators(data.id, data.operatorUserIds);
     const lockedAt =
       data.status === "locked"
         ? existing.locked_at
           ? stamp(existing.locked_at)
           : new Date().toISOString()
         : null;
+    const details = normalizeDetails(existing.details);
+    details.booth360 = { ...details.booth360, enabled: data.booth360 };
     await sql`
       update events
       set title = ${data.title},
@@ -372,12 +466,46 @@ export const updateEventMeta = createServerFn({ method: "POST" })
           venue = ${data.venue},
           status = ${data.status},
           client_user_id = ${data.clientUserId},
-          dj_user_id = ${data.djUserId},
+          dj_user_id = ${data.djUserIds[0] ?? null},
+          details = ${JSON.stringify(details)}::jsonb,
           locked_at = ${lockedAt},
           updated_at = now()
       where id = ${data.id}
     `;
     await logChange(data.id, profile, `Updated event info · ${data.status}`);
+    return { ok: true };
+  });
+
+export const deleteLogin = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const userId = typeof (input as { userId?: unknown })?.userId === "string" ? (input as { userId: string }).userId : "";
+    if (!userId) throw new Error("Missing account");
+    return { userId };
+  })
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const profile = await ensureProfile(context.userId);
+    assertAdmin(profile);
+    if (data.userId === profile.userId) throw new Error("You cannot delete the login you are using");
+    await ensureFileColumns();
+    const sql = await getSql();
+    const rows = await sql<{ role: string }>`select role from profiles where user_id = ${data.userId}`;
+    const target = rows[0];
+    if (!target) throw new Error("That account was not found");
+    if (target.role === "admin") {
+      const admins = await sql<{ user_id: string }>`select user_id from profiles where role = 'admin'`;
+      if (admins.length <= 1) throw new Error("Keep at least one admin");
+    }
+    await sql`update events set client_user_id = null, updated_at = now() where client_user_id = ${data.userId}`;
+    await sql`delete from event_djs where user_id = ${data.userId}`;
+    await sql`delete from event_operators where user_id = ${data.userId}`;
+    const primary = await sql<{ id: string }>`select id from events where dj_user_id = ${data.userId}`;
+    for (const event of primary) {
+      const rest = await sql<{ user_id: string }>`select user_id from event_djs where event_id = ${event.id} limit 1`;
+      await sql`update events set dj_user_id = ${rest[0]?.user_id ?? null}, updated_at = now() where id = ${event.id}`;
+    }
+    await sql`delete from profiles where user_id = ${data.userId}`;
+    await sql`delete from "user" where id = ${data.userId}`;
     return { ok: true };
   });
 
@@ -411,7 +539,7 @@ export const saveDetails = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const profile = await ensureProfile(context.userId);
     const existing = await loadEvent(data.id, profile);
-    if (profile.role === "dj") throw new Error("You can read this wedding. Ask the admin to change it.");
+    if (profile.role === "dj" || profile.role === "operator") throw new Error("You can read this event. Ask the admin to change it.");
     if (profile.role !== "admin" && (existing.status === "locked" || existing.locked_at)) {
       throw new Error("This event is locked. Ask your DJ to unlock it.");
     }
@@ -465,7 +593,7 @@ export const saveTimelinePdf = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const profile = await ensureProfile(context.userId);
     const existing = await loadEvent(data.id, profile);
-    if (profile.role === "dj") throw new Error("You can read this wedding. Ask the admin to change it.");
+    if (profile.role === "dj" || profile.role === "operator") throw new Error("You can read this event. Ask the admin to change it.");
     if (profile.role !== "admin" && (existing.status === "locked" || existing.locked_at)) {
       throw new Error("This event is locked. Ask your DJ to unlock it.");
     }
@@ -492,7 +620,7 @@ export const clearTimelinePdf = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const profile = await ensureProfile(context.userId);
     const existing = await loadEvent(data.id, profile);
-    if (profile.role === "dj") throw new Error("You can read this wedding. Ask the admin to change it.");
+    if (profile.role === "dj" || profile.role === "operator") throw new Error("You can read this event. Ask the admin to change it.");
     if (profile.role !== "admin" && (existing.status === "locked" || existing.locked_at)) {
       throw new Error("This event is locked. Ask your DJ to unlock it.");
     }
@@ -515,7 +643,7 @@ export const getContractPdf = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const profile = await ensureProfile(context.userId);
-    if (profile.role === "dj") throw new Error("Contracts stay with the admin and the couple.");
+    if (profile.role === "dj" || profile.role === "operator") throw new Error("Contracts stay with the admin and the couple.");
     await loadEvent(data.id, profile);
     const sql = await getSql();
     const rows = await sql<{ contract_pdf: unknown; contract_pdf_name: string }>`
@@ -589,7 +717,7 @@ export const saveBoothNotes = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const profile = await ensureProfile(context.userId);
-    if (profile.role === "client") throw new Error("Admin only");
+    if (profile.role === "client" || profile.role === "operator") throw new Error("Admin only");
     await loadEvent(data.id, profile);
     const sql = await getSql();
     await sql`
@@ -601,24 +729,61 @@ export const saveBoothNotes = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+async function listAccounts(role: "admin" | "client" | "dj" | "operator"): Promise<ClientRow[]> {
+  await ensureFileColumns();
+  const sql = await getSql();
+  const rows = await sql<{ user_id: string; display_name: string; email: string; issued_password: string | null }>`
+    select p.user_id, p.display_name, u.email, p.issued_password
+    from profiles p
+    join "user" u on u.id = p.user_id
+    where p.role = ${role}
+    order by p.display_name asc
+  `;
+  const events = await sql<{ title: string; client_user_id: string | null; dj_user_id: string | null; id: string }>`
+    select id, title, client_user_id, dj_user_id from events order by event_date asc nulls last
+  `;
+  const extra =
+    role === "dj"
+      ? await sql<{ event_id: string; user_id: string }>`select event_id, user_id from event_djs`
+      : role === "operator"
+        ? await sql<{ event_id: string; user_id: string }>`select event_id, user_id from event_operators`
+        : [];
+  return rows.map((row) => {
+    const titles = new Set<string>();
+    if (role === "client") {
+      for (const event of events) if (event.client_user_id === row.user_id) titles.add(event.title);
+    }
+    if (role === "dj") {
+      for (const event of events) if (event.dj_user_id === row.user_id) titles.add(event.title);
+      for (const link of extra) {
+        if (link.user_id !== row.user_id) continue;
+        const event = events.find((item) => item.id === link.event_id);
+        if (event) titles.add(event.title);
+      }
+    }
+    if (role === "operator") {
+      for (const link of extra) {
+        if (link.user_id !== row.user_id) continue;
+        const event = events.find((item) => item.id === link.event_id);
+        if (event) titles.add(event.title);
+      }
+    }
+    return {
+      userId: row.user_id,
+      displayName: row.display_name,
+      email: row.email,
+      password: row.issued_password ?? "",
+      events: [...titles],
+    };
+  });
+}
+
 export const listClients = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<ClientRow[]> => {
     const profile = await ensureProfile(context.userId);
     assertAdmin(profile);
-    const sql = await getSql();
-    const rows = await sql<{ user_id: string; display_name: string; email: string }>`
-      select p.user_id, p.display_name, u.email
-      from profiles p
-      join "user" u on u.id = p.user_id
-      where p.role = 'client'
-      order by p.display_name asc
-    `;
-    return rows.map((row) => ({
-      userId: row.user_id,
-      displayName: row.display_name,
-      email: row.email,
-    }));
+    return listAccounts("client");
   });
 
 export const createClientAccount = createServerFn({ method: "POST" })
@@ -637,6 +802,7 @@ export const createClientAccount = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const profile = await ensureProfile(context.userId);
     assertAdmin(profile);
+    await ensureFileColumns();
     const sql = await getSql();
     const existing = await sql<{ id: string }>`
       select id from "user" where lower(email) = ${data.email}
@@ -659,8 +825,8 @@ export const createClientAccount = createServerFn({ method: "POST" })
         )
       `;
       await sql`
-        insert into profiles (user_id, role, display_name)
-        values (${userId}, 'client', ${data.name})
+        insert into profiles (user_id, role, display_name, issued_password)
+        values (${userId}, 'client', ${data.name}, ${data.password})
       `;
     } catch (error) {
       await sql`delete from "user" where id = ${userId}`;
@@ -678,24 +844,110 @@ export const createClientAccount = createServerFn({ method: "POST" })
     return { userId, email: data.email, name: data.name };
   });
 
+export const listAdmins = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<ClientRow[]> => {
+    const profile = await ensureProfile(context.userId);
+    assertAdmin(profile);
+    return listAccounts("admin");
+  });
+
+export const createLogin = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as Record<string, unknown>;
+    const name = typeof raw.name === "string" ? raw.name.trim() : "";
+    const email = typeof raw.email === "string" ? raw.email.trim().toLowerCase() : "";
+    const password = typeof raw.password === "string" ? raw.password : "";
+    const role = raw.role === "admin" || raw.role === "dj" || raw.role === "client" || raw.role === "operator" ? raw.role : "";
+    if (name.length < 2) throw new Error("Name is required");
+    if (!email.includes("@") || !email.includes(".")) throw new Error("Enter a real email");
+    if (password.length < 8) throw new Error("Password needs at least 8 characters");
+    if (!role) throw new Error("Pick Admin, DJ, Operator, or Client");
+    return { name, email, password, role };
+  })
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const profile = await ensureProfile(context.userId);
+    assertAdmin(profile);
+    await ensureFileColumns();
+    const sql = await getSql();
+    const existing = await sql<{ id: string }>`
+      select id from "user" where lower(email) = ${data.email}
+    `;
+    if (existing[0]) throw new Error("That email already has an account");
+    const { hashPassword } = await import("better-auth/crypto");
+    const passwordHash = await hashPassword(data.password);
+    const userId = rid();
+    const accountId = rid();
+    await sql`
+      insert into "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+      values (${userId}, ${data.name}, ${data.email}, true, now(), now())
+    `;
+    try {
+      await sql`
+        insert into "account" (
+          "id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt"
+        ) values (
+          ${accountId}, ${userId}, 'credential', ${userId}, ${passwordHash}, now(), now()
+        )
+      `;
+      await sql`
+        insert into profiles (user_id, role, display_name, issued_password)
+        values (${userId}, ${data.role}, ${data.name}, ${data.password})
+      `;
+    } catch (error) {
+      await sql`delete from "user" where id = ${userId}`;
+      throw error instanceof Error ? error : new Error("Could not create that login");
+    }
+    return { userId, email: data.email, name: data.name, role: data.role };
+  });
+
 export const listDjs = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<ClientRow[]> => {
     const profile = await ensureProfile(context.userId);
     assertAdmin(profile);
+    return listAccounts("dj");
+  });
+
+export const listOperators = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<ClientRow[]> => {
+    const profile = await ensureProfile(context.userId);
+    assertAdmin(profile);
+    return listAccounts("operator");
+  });
+
+export const setLoginPassword = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as Record<string, unknown>;
+    const userId = typeof raw.userId === "string" ? raw.userId : "";
+    const password = typeof raw.password === "string" ? raw.password : "";
+    if (!userId) throw new Error("Missing account");
+    if (password.length < 8) throw new Error("Password needs at least 8 characters");
+    return { userId, password };
+  })
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const profile = await ensureProfile(context.userId);
+    assertAdmin(profile);
+    await ensureFileColumns();
     const sql = await getSql();
-    const rows = await sql<{ user_id: string; display_name: string; email: string }>`
-      select p.user_id, p.display_name, u.email
-      from profiles p
-      join "user" u on u.id = p.user_id
-      where p.role = 'dj'
-      order by p.display_name asc
+    const users = await sql<{ id: string }>`select id from "user" where id = ${data.userId}`;
+    if (!users[0]) throw new Error("That account was not found");
+    const accounts = await sql<{ id: string }>`
+      select id from "account" where "userId" = ${data.userId} and "providerId" = 'credential'
     `;
-    return rows.map((row) => ({
-      userId: row.user_id,
-      displayName: row.display_name,
-      email: row.email,
-    }));
+    if (!accounts[0]) throw new Error("That login has no password");
+    const { hashPassword } = await import("better-auth/crypto");
+    const passwordHash = await hashPassword(data.password);
+    await sql`
+      update "account"
+      set "password" = ${passwordHash}, "updatedAt" = now()
+      where "userId" = ${data.userId} and "providerId" = 'credential'
+    `;
+    await sql`update profiles set issued_password = ${data.password} where user_id = ${data.userId}`;
+    return { ok: true };
   });
 
 export const createDjAccount = createServerFn({ method: "POST" })
@@ -736,8 +988,8 @@ export const createDjAccount = createServerFn({ method: "POST" })
         )
       `;
       await sql`
-        insert into profiles (user_id, role, display_name)
-        values (${userId}, 'dj', ${data.name})
+        insert into profiles (user_id, role, display_name, issued_password)
+        values (${userId}, 'dj', ${data.name}, ${data.password})
       `;
     } catch (error) {
       await sql`delete from "user" where id = ${userId}`;

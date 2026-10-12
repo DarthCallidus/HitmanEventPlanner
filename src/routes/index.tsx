@@ -39,6 +39,7 @@ function Home() {
   }
   if (user && profile?.role === "admin") return <Navigate to="/admin" />;
   if (user && profile?.role === "dj") return <Navigate to="/dj" />;
+  if (user && profile?.role === "operator") return <Navigate to="/operator" />;
   if (user && profile) return <Navigate to="/portal" />;
 
   return (

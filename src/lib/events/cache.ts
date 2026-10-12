@@ -20,7 +20,9 @@ export function readCache(id: string): CachedEvent | null {
     parsed.event.details = normalizeDetails(parsed.event.details);
     parsed.event.boothNotes = parsed.event.boothNotes ?? "";
     parsed.event.contractPdfName = parsed.event.contractPdfName ?? "";
+    parsed.event.operatorUserIds = parsed.event.operatorUserIds ?? [];
     parsed.event.djUserId = parsed.event.djUserId ?? null;
+    parsed.event.djUserIds = parsed.event.djUserIds ?? (parsed.event.djUserId ? [parsed.event.djUserId] : []);
     parsed.event.djName = parsed.event.djName ?? null;
     parsed.event.changes = parsed.event.changes ?? [];
     return parsed;

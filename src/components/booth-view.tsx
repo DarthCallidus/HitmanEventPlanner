@@ -137,7 +137,8 @@ export function BoothView({
           ? "Online · unsynced"
           : "Online · synced";
 
-  const couple = event.details.day.coupleNames || event.title;
+  const couple = event.details.kind === "other" ? event.title : event.details.day.coupleNames || event.title;
+  const tabs = event.details.kind === "other" ? TABS.filter((item) => item.id !== "ceremony" && item.id !== "reception") : TABS;
   const cached = readCache(event.id);
 
   return (
@@ -450,8 +451,8 @@ export function BoothView({
         )}
       </div>
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface">
-        <div className="mx-auto grid max-w-lg grid-cols-8">
-          {TABS.map((item) => (
+        <div className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+          {tabs.map((item) => (
             <button
               key={item.id}
               type="button"

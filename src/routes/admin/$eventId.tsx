@@ -14,6 +14,7 @@ import {
   getEvent,
   listClients,
   listDjs,
+  listOperators,
   saveContractPdf,
   updateEventMeta,
 } from "@/lib/events/server";
@@ -41,13 +42,16 @@ function EventDesk({ eventId }: { eventId: string }) {
   const [event, setEvent] = useState<EventRecord | null>(null);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [djs, setDjs] = useState<ClientRow[]>([]);
+  const [operators, setOperators] = useState<ClientRow[]>([]);
   const [error, setError] = useState("");
   const [title, setTitle] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [venue, setVenue] = useState("");
   const [status, setStatus] = useState<EventStatus>("new");
   const [clientUserId, setClientUserId] = useState("");
-  const [djUserId, setDjUserId] = useState("");
+  const [djUserIds, setDjUserIds] = useState<string[]>([]);
+  const [booth360, setBooth360] = useState(false);
+  const [operatorUserIds, setOperatorUserIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [clientName, setClientName] = useState("");
@@ -64,7 +68,9 @@ function EventDesk({ eventId }: { eventId: string }) {
     setVenue(next.venue);
     setStatus(next.status);
     setClientUserId(next.clientUserId ?? "");
-    setDjUserId(next.djUserId ?? "");
+    setDjUserIds(next.djUserIds?.length ? next.djUserIds : next.djUserId ? [next.djUserId] : []);
+    setBooth360(next.details.booth360.enabled);
+    setOperatorUserIds(next.operatorUserIds ?? []);
     writeCache(next);
   }
 
@@ -78,9 +84,10 @@ function EventDesk({ eventId }: { eventId: string }) {
     reload();
     listClients().then(setClients).catch(() => setClients([]));
     listDjs().then(setDjs).catch(() => setDjs([]));
+    listOperators().then(setOperators).catch(() => setOperators([]));
   }, [eventId]);
 
-  async function saveMeta(nextStatus = status, nextClient = clientUserId, nextDj = djUserId) {
+  async function saveMeta(nextStatus = status, nextClient = clientUserId, nextDjs = djUserIds) {
     setBusy(true);
     setError("");
     try {
@@ -92,7 +99,9 @@ function EventDesk({ eventId }: { eventId: string }) {
           venue,
           status: nextStatus,
           clientUserId: nextClient || null,
-          djUserId: nextDj || null,
+          djUserIds: nextDjs,
+          booth360,
+          operatorUserIds,
         },
       });
       setNotice("Event info saved");
@@ -205,7 +214,7 @@ function EventDesk({ eventId }: { eventId: string }) {
           <Link to="/admin" className="text-sm text-faint">
             The book
           </Link>
-          <h1 className="font-display text-4xl">{event.details.day.coupleNames || event.title}</h1>
+          <h1 className="font-display text-4xl">{event.details.kind === "other" ? event.title : event.details.day.coupleNames || event.title}</h1>
           <p className="text-muted">
             {formatLongDate(event.eventDate)} · {daysLabel(event.eventDate)}
           </p>
@@ -294,18 +303,65 @@ function EventDesk({ eventId }: { eventId: string }) {
               </option>
             ))}
           </select>
+          {clientUserId && (
+            <p className="mt-2 text-sm text-muted">
+              Password · {clients.find((client) => client.userId === clientUserId)?.password || "Not on file. Set it in Logins."}
+            </p>
+          )}
         </label>
-        <label className="block">
-          <span className="mb-1.5 block text-sm text-muted">Assigned DJ</span>
-          <select className="field" value={djUserId} onChange={(e) => setDjUserId(e.target.value)}>
-            <option value="">No DJ yet</option>
-            {djs.map((dj) => (
-              <option key={dj.userId} value={dj.userId}>
-                {dj.displayName} · {dj.email}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div>
+          <p className="mb-1.5 text-sm text-muted">Assigned DJs</p>
+          {djs.length === 0 ? (
+            <p className="text-sm text-faint">No DJs yet. Create one in Logins.</p>
+          ) : (
+            <div className="space-y-2">
+              {djs.map((dj) => {
+                const on = djUserIds.includes(dj.userId);
+                return (
+                  <button
+                    key={dj.userId}
+                    type="button"
+                    className={on ? "btn btn-block" : "btn-line btn-block"}
+                    onClick={() => setDjUserIds((current) => (on ? current.filter((id) => id !== dj.userId) : [...current, dj.userId]))}
+                  >
+                    {dj.displayName} · {dj.email}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className="mt-2 text-sm text-faint">Tap every DJ who is working this event. Then save.</p>
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm text-muted">360 photobooth</p>
+          <button type="button" className={booth360 ? "btn btn-block" : "btn-line btn-block"} onClick={() => setBooth360((on) => !on)}>
+            {booth360 ? "On for this event" : "Off"}
+          </button>
+          {booth360 && (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm text-muted">Operators</p>
+              {operators.length === 0 ? (
+                <p className="text-sm text-faint">No operators yet. Create one in Logins.</p>
+              ) : (
+                operators.map((person) => {
+                  const on = operatorUserIds.includes(person.userId);
+                  return (
+                    <button
+                      key={person.userId}
+                      type="button"
+                      className={on ? "btn btn-block" : "btn-line btn-block"}
+                      onClick={() =>
+                        setOperatorUserIds((current) => (on ? current.filter((id) => id !== person.userId) : [...current, person.userId]))
+                      }
+                    >
+                      {person.displayName} · {person.email}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
         <button type="button" className="btn btn-block" disabled={busy} onClick={() => saveMeta()}>
           Save event info
         </button>

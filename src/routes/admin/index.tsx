@@ -31,7 +31,8 @@ function Desk() {
   const [venue, setVenue] = useState("");
   const [contract, setContract] = useState<File | null>(null);
   const [djs, setDjs] = useState<ClientRow[]>([]);
-  const [djUserId, setDjUserId] = useState("");
+  const [djUserIds, setDjUserIds] = useState<string[]>([]);
+  const [kind, setKind] = useState<"wedding" | "other">("wedding");
   const [busy, setBusy] = useState(false);
 
   function reload() {
@@ -74,10 +75,10 @@ function Desk() {
     setError("");
     try {
       const draft = sample
-        ? { ...buildSample(), djUserId: null }
-        : { title: title.trim(), eventDate, venue, status: "new" as const, details: {}, djUserId: djUserId || null };
+        ? { ...buildSample(), djUserIds: [] as string[], kind: "wedding" as const }
+        : { title: title.trim(), eventDate, venue, status: "new" as const, details: { kind }, djUserIds, kind };
       if (!sample && !draft.title) {
-        setError("Name the wedding");
+        setError(kind === "other" ? "Name the event" : "Name the wedding");
         setBusy(false);
         return;
       }
@@ -137,7 +138,7 @@ function Desk() {
           </button>
         </div>
         <Link to="/admin/people" className="btn-line btn-block">
-          DJs and clients
+          Logins
         </Link>
         {creating && (
           <form
@@ -147,7 +148,21 @@ function Desk() {
               void onCreate(false);
             }}
           >
-            <input className="field" placeholder="Smith Wedding" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Event name" />
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" className={kind === "wedding" ? "btn" : "btn-line"} onClick={() => setKind("wedding")}>
+                Wedding
+              </button>
+              <button type="button" className={kind === "other" ? "btn" : "btn-line"} onClick={() => setKind("other")}>
+                Other event
+              </button>
+            </div>
+            <input
+              className="field"
+              placeholder={kind === "other" ? "Pool party" : "Smith Wedding"}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              aria-label="Event name"
+            />
             <input className="field" type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} aria-label="Event date" />
             <input className="field" placeholder="Venue" value={venue} onChange={(e) => setVenue(e.target.value)} aria-label="Venue" />
             <label className="btn-line">
@@ -159,17 +174,28 @@ function Desk() {
                 onChange={(e) => setContract(e.target.files?.[0] ?? null)}
               />
             </label>
-            <label className="block">
-              <span className="mb-1.5 block text-sm text-muted">Assigned DJ</span>
-              <select className="field" value={djUserId} onChange={(e) => setDjUserId(e.target.value)} aria-label="Assigned DJ">
-                <option value="">No DJ yet</option>
-                {djs.map((dj) => (
-                  <option key={dj.userId} value={dj.userId}>
-                    {dj.displayName} · {dj.email}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div>
+              <p className="mb-1.5 text-sm text-muted">Assigned DJs</p>
+              {djs.length === 0 ? (
+                <p className="text-sm text-faint">No DJs yet. Create one in Logins.</p>
+              ) : (
+                <div className="space-y-2">
+                  {djs.map((dj) => {
+                    const on = djUserIds.includes(dj.userId);
+                    return (
+                      <button
+                        key={dj.userId}
+                        type="button"
+                        className={on ? "btn btn-block" : "btn-line btn-block"}
+                        onClick={() => setDjUserIds((current) => (on ? current.filter((id) => id !== dj.userId) : [...current, dj.userId]))}
+                      >
+                        {dj.displayName} · {dj.email}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <button className="btn btn-block" disabled={busy} type="submit">
               Create event
             </button>
@@ -183,7 +209,7 @@ function Desk() {
 
       {!events && <p className="mt-8 text-muted">Loading the book…</p>}
       {events && visible.length === 0 && (
-        <p className="mt-8 text-muted">No weddings yet. Create one, or open the sample and walk Booth.</p>
+        <p className="mt-8 text-muted">No events yet. Create one, or open the sample and walk Booth.</p>
       )}
 
       <EventGroup label="Upcoming" events={upcoming} />
@@ -209,6 +235,7 @@ function EventGroup({ label, events }: { label: string; events: EventSummary[] }
             <StatusChip status={event.status} />
           </div>
           <h3 className="mt-2 font-display text-2xl">{event.title}</h3>
+          {event.kind === "other" && <p className="text-sm text-faint">Other event</p>}
           <p className="text-muted">{event.couple && event.couple !== event.title ? event.couple : event.venue}</p>
           <p className="mt-1 text-sm text-faint">{event.venue}</p>
           <div className="mt-4 h-1 overflow-hidden rounded-full bg-bg">

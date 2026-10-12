@@ -29,11 +29,13 @@ function ranks(values: Record<string, string>): GenreRank[] {
 
 export function buildSample(now = new Date()): SampleDraft {
   const details: EventDetails = {
+    kind: "wedding",
     day: {
       coupleNames: "Elena Voss & Marcus Hale",
       ceremonyLocation: "The Grand Hall, garden terrace, 100 Market Street, Roanoke, VA",
       receptionLocation: "The Grand Hall, ballroom",
       ceremonyStart: "4:30 PM",
+      endTime: "",
       coordinatorName: "Avery Cole",
       coordinatorPhone: "(540) 555-0148",
       liveMusicians: "Yes. A string trio plays the seating and the processional.",
@@ -137,6 +139,7 @@ export function buildSample(now = new Date()): SampleDraft {
         { id: rid(), label: "Send-off", time: "10:40 PM", notes: "Sparklers." },
       ],
     },
+    booth360: { enabled: false, when: "", where: "", start: "", end: "", notes: "" },
   };
 
   return {
