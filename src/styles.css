@@ -238,6 +238,27 @@ textarea.field-short {
   outline-offset: 1px;
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field .field {
+  padding-right: 4.5rem;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.45rem;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--app-fg);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.35rem 0.55rem;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

@@ -5,6 +5,7 @@ import { claimFirstAdmin } from "@/lib/events/server";
 export function AuthForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -68,18 +69,28 @@ export function AuthForm() {
             required
           />
         </label>
-        <label className="block">
+        <div>
           <span className="mb-1.5 block text-sm text-muted">Password</span>
-          <input
-            className="field"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            minLength={8}
-            required
-          />
-        </label>
+          <div className="password-field">
+            <input
+              className="field"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              minLength={8}
+              required
+            />
+            <button
+              type="button"
+              className="password-toggle"
+              onClick={() => setShowPassword((open) => !open)}
+              aria-pressed={showPassword}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+        </div>
         {error && <p className="text-sm text-danger">{error}</p>}
         <button className="btn btn-block" type="submit" disabled={pending}>
           {pending ? "Working…" : "Enter"}
