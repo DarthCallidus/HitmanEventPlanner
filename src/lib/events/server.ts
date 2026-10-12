@@ -852,6 +852,51 @@ export const listAdmins = createServerFn({ method: "GET" })
     return listAccounts("admin");
   });
 
+const FIRST_ADMIN_EMAIL = "hireahitmanent@gmail.com";
+
+export const claimFirstAdmin = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const raw = (input ?? {}) as Record<string, unknown>;
+    const email = typeof raw.email === "string" ? raw.email.trim().toLowerCase() : "";
+    const password = typeof raw.password === "string" ? raw.password : "";
+    if (!email.includes("@") || !email.includes(".")) throw new Error("Enter a real email");
+    if (password.length < 8) throw new Error("Password needs at least 8 characters");
+    return { email, password };
+  })
+  .handler(async ({ data }) => {
+    if (data.email !== FIRST_ADMIN_EMAIL) throw new Error("The first login has to be hireahitmanent@gmail.com");
+    await ensureFileColumns();
+    const sql = await getSql();
+    const existing = await sql<{ id: string }>`select id from "user" limit 1`;
+    if (existing[0]) throw new Error("An admin already exists");
+    const { hashPassword } = await import("better-auth/crypto");
+    const passwordHash = await hashPassword(data.password);
+    const userId = rid();
+    const accountId = rid();
+    const name = "Hitman Entertainment";
+    await sql`
+      insert into "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+      values (${userId}, ${name}, ${data.email}, true, now(), now())
+    `;
+    try {
+      await sql`
+        insert into "account" (
+          "id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt"
+        ) values (
+          ${accountId}, ${userId}, 'credential', ${userId}, ${passwordHash}, now(), now()
+        )
+      `;
+      await sql`
+        insert into profiles (user_id, role, display_name, issued_password)
+        values (${userId}, 'admin', ${name}, ${data.password})
+      `;
+    } catch (error) {
+      await sql`delete from "user" where id = ${userId}`;
+      throw error instanceof Error ? error : new Error("Could not create that login");
+    }
+    return { ok: true };
+  });
+
 export const createLogin = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
     const raw = (input ?? {}) as Record<string, unknown>;

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { authClient, GROK_PROVIDERS, signIn } from "@/lib/auth/client";
+import { claimFirstAdmin } from "@/lib/events/server";
 
 export function AuthForm() {
   const [email, setEmail] = useState("");
@@ -20,6 +21,25 @@ export function AuthForm() {
       if (result.error) {
         const detail = `${result.error.code ?? ""} ${result.error.message ?? ""}`;
         if (/invalid email or password/i.test(detail)) {
+          try {
+            await claimFirstAdmin({ data: { email: email.trim().toLowerCase(), password } });
+            const again = await authClient.signIn.email({
+              email: email.trim(),
+              password,
+              callbackURL: "/",
+            });
+            if (!again.error) {
+              window.location.assign("/");
+              return;
+            }
+          } catch (reason) {
+            const message = reason instanceof Error ? reason.message : "";
+            if (message.includes("first login")) {
+              setError(message);
+              setPending(false);
+              return;
+            }
+          }
           setError("No account for that email, or the password is wrong.");
         } else {
           setError(result.error.message ?? "Sign-in failed");

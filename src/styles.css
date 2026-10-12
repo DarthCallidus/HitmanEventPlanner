@@ -81,6 +81,7 @@
   display: block;
   object-fit: contain;
   object-position: center;
+  background: #000;
 }
 
 .brand-hero,
