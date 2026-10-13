@@ -77,11 +77,36 @@
   }
 }
 
-.brand-logo {
+.brand-logo,
+.brand-lockup {
   display: block;
   object-fit: contain;
   object-position: center;
-  background: #000;
+}
+
+.brand-lockup {
+  display: grid;
+  place-items: center;
+}
+
+.brand-lockup img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.brand-on-day {
+  display: none;
+}
+
+:root.theme-day .brand-on-night {
+  display: none;
+}
+
+:root.theme-day .brand-on-day {
+  display: block;
 }
 
 .brand-hero,
@@ -109,7 +134,7 @@
 .brand-header {
   width: min(8.5rem, 42vw);
   height: auto;
-  aspect-ratio: 960 / 783;
+  aspect-ratio: 1;
 }
 
 @media (orientation: landscape) and (max-height: 520px) {

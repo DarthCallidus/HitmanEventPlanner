@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { authClient, GROK_PROVIDERS, signIn } from "@/lib/auth/client";
+import { authClient } from "@/lib/auth/client";
 import { claimFirstAdmin } from "@/lib/events/server";
 
 export function AuthForm() {
@@ -96,23 +96,6 @@ export function AuthForm() {
           {pending ? "Working…" : "Enter"}
         </button>
       </form>
-      <div className="mt-4 space-y-2">
-        {GROK_PROVIDERS.map((provider) => (
-          <button
-            key={provider.providerId}
-            type="button"
-            className="btn-line btn-block"
-            onClick={() => {
-              setError(null);
-              void signIn(provider.providerId, { callbackURL: "/" }).catch((reason) => {
-                setError(reason instanceof Error ? reason.message : "Sign-in failed");
-              });
-            }}
-          >
-            Continue with {provider.label}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
